@@ -11,28 +11,6 @@ Search any Guelph address to get:
 - **Live City layers:** amenities, AED defibrillators, road closures and sidewalk snow clearing.
 - **A city-wide score map and a Census view** that links access to income, age, renting and commuting in each of Guelph's 201 census neighbourhoods.
 
-## Publish it on GitHub Pages
-
-1. On GitHub, create a new **public** repository named `15-Minute-Guelph`.
-2. Click **uploading an existing file**. Drag in everything from this folder, including the `data` and `scripts` folders and the `.nojekyll` file, then click **Commit changes**.
-   - Windows hides files that start with a dot. If `.nojekyll` doesn't show up, it isn't critical: it only stops GitHub from processing the site with Jekyll.
-3. Go to **Settings > Pages**. Under **Build and deployment**, set **Source** to *Deploy from a branch* and **Branch** to `main` / `(root)`, then save.
-4. After a minute or two the site is live at
-   **https://randyharris1999-cloud.github.io/15-Minute-Guelph/**
-
-Live buses work right away. `config.js` points at the Cloudflare Worker you already run for the Guelph Trip Planner (`guelph-trip-planner`), and that Worker already accepts requests from `randyharris1999-cloud.github.io`. Nothing needs to change on Cloudflare.
-
-## Test on your own computer
-
-Browsers block data loading from files opened by double-clicking, so serve the folder instead:
-
-```
-cd fifteen-minute-guelph
-python -m http.server 8000
-```
-
-Open http://localhost:8000. Your Worker also allows `localhost:8000`, so live buses work here too.
-
 ## What's in the folder
 
 | Path | What it is |
