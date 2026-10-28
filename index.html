@@ -149,6 +149,22 @@ footer{font-size:11px;color:var(--muted);margin-top:auto}
 .tag{background:var(--panel);color:var(--ink);border:1px solid var(--rule);border-radius:6px;padding:2px 7px;font-size:11px;font-weight:600;white-space:nowrap;box-shadow:0 1px 4px rgba(0,0,0,.15)}
 .leaflet-tooltip.tt{background:var(--panel);color:var(--ink);border:1px solid var(--rule);box-shadow:0 2px 8px rgba(0,0,0,.18);font-family:var(--f-body)}
 .leaflet-tooltip.tt::before{display:none}
+.camlist{display:flex;flex-direction:column;border-top:1px solid var(--rule)}
+.camrow{display:grid;grid-template-columns:22px 1fr auto;gap:10px;align-items:center;padding:8px 2px;border:0;border-bottom:1px solid var(--rule);background:none;color:inherit;font:inherit;text-align:left;width:100%;cursor:pointer}
+.camrow:hover{background:var(--chip)}
+.camrow:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.camrow small{display:block;color:var(--muted);font-size:12px}
+.camrow .go{font-size:12px;font-weight:600;color:var(--accent-text)}
+.campop .leaflet-popup-content-wrapper{background:var(--panel);color:var(--ink);border-radius:10px}
+.campop .leaflet-popup-tip{background:var(--panel)}
+.campop .leaflet-popup-content{margin:10px;width:min(360px,72vw)!important}
+.campop h4{margin:0 0 2px;font-family:var(--f-display);font-size:18px;font-weight:600}
+.campop p{margin:0 0 8px;font-size:12px;color:var(--muted)}
+.campop .frame{position:relative;width:100%;aspect-ratio:16/9;background:#0B1214;border-radius:6px;overflow:hidden}
+.campop iframe{position:absolute;inset:0;width:100%;height:100%;border:0}
+.campop .src{display:flex;justify-content:space-between;gap:8px;margin-top:6px;font-size:11px;color:var(--muted)}
+.campop a{color:var(--accent-text)}
+.camlink{display:inline-block;margin-top:2px;padding:8px 12px;border-radius:6px;background:var(--accent);color:var(--accent-ink)!important;font-weight:600;text-decoration:none}
 .loading{position:absolute;inset:0;display:grid;place-items:center;background:var(--land);z-index:2000;font-family:var(--f-mono);color:var(--muted)}
 @media (max-width:760px){
   .app{display:flex;flex-direction:column-reverse;height:auto}
@@ -228,6 +244,11 @@ footer{font-size:11px;color:var(--muted);margin-top:auto}
       <div class="deps" id="deps"></div>
     </section>
 
+    <section class="sec" id="secCams">
+      <h3>Live cameras <em>tap to watch</em></h3>
+      <div class="camlist" id="camList"></div>
+    </section>
+
     <section class="sec" id="secLive">
       <h3>Live data <em id="liveClock"></em></h3>
       <div id="liveBody"><p style="margin:0;color:var(--muted);font-size:13px">Live buses, arrival predictions, service alerts, road closures and sidewalk snow clearing run on the website version of this app.</p></div>
@@ -289,6 +310,7 @@ const GLYPH = {
   restroom:  {d:"M8 6.6a1.7 1.7 0 1 1 0-3.4a1.7 1.7 0 1 1 0 3.4z M16 6.6a1.7 1.7 0 1 1 0-3.4a1.7 1.7 0 1 1 0 3.4z M6 21v-6H4.6V9.5h6.8V15H10v6 M14 21v-4.5h-2.4L14 9h4l2.4 7.5H18V21"},
   bus:       {d:"M6.5 3h11a2 2 0 0 1 2 2v11.5a1.5 1.5 0 0 1-1.5 1.5H6a1.5 1.5 0 0 1-1.5-1.5V5a2 2 0 0 1 2-2z M4.5 11h15 M7.5 21v-3 M16.5 21v-3 M7.8 14.6h.1 M16.1 14.6h.1"},
   aed:       {d:"M12 20s-7.6-4.6-7.6-10.1A4.3 4.3 0 0 1 12 7.4a4.3 4.3 0 0 1 7.6 2.5C19.6 15.4 12 20 12 20z M7.6 12.4h2.3l1.2-2.4 1.7 4.4 1.2-2h2.4"},
+  camera:    {d:"M3.5 8.2h3.4l1.7-2.7h6.8l1.7 2.7h3.4v11h-17z M12 16.9a3.3 3.3 0 1 1 0-6.6a3.3 3.3 0 1 1 0 6.6z M17.6 10.6h.1"},
   trees:     {d:"M12 3a5.5 5.5 0 0 0-4.3 8.9A4.4 4.4 0 0 0 10 20h4a4.4 4.4 0 0 0 2.3-8.1A5.5 5.5 0 0 0 12 3z M12 13.5v7.5 M12 16.5l-2.2-1.8 M12 15l2.4-2"},
 };
 const BUS_COLOR = "#1C2A2D";
@@ -1030,6 +1052,39 @@ function drawLive(ctx,X,Y,z){
   if(LV.show.closures && LV.closures.length && S.mode!=="census"){ for(const kind of ["detour","closed"]){ ctx.beginPath(); for(const l of LV.closures){ if(l.kind!==kind) continue; ctx.moveTo(X(l.xs[0]),Y(l.ys[0])); for(let j=1;j<l.xs.length;j++) ctx.lineTo(X(l.xs[j]),Y(l.ys[j])); }
       ctx.lineCap="round"; ctx.strokeStyle="#fff"; ctx.lineWidth=9; ctx.stroke(); ctx.strokeStyle= kind==="closed"? "#D7263D" : "#E9A94E"; ctx.lineWidth=5; ctx.setLineDash(kind==="closed"? [] : [8,6]); ctx.stroke(); ctx.setLineDash([]); } }
 }
+/* ---- live cameras (embedded with each camera's own public player) ---- */
+const CAM_COLOR = "#0B5D7A";
+const CAMERAS = [
+  { id:"market", name:"Market Square", where:"1 Carden St, in front of City Hall", by:"City of Guelph", lat:43.54365, lon:-80.24855,
+    note:"A live, 24-hour view of the square. The City's camera doesn't record.",
+    page:"https://guelph.ca/living/arts-and-culture/market-square/", pageLabel:"guelph.ca",
+    embed:() => "https://g0.ipcamlive.com/player/player.php?alias=6a4c68b2cb31d&mute=1&disablezoombutton=1&disableframecapture=1&disabletimelapseplayer=1&disablestorageplayer=1&disabledownloadbutton=1&disableplaybackspeedbutton=1&disablenavigation=1" },
+  { id:"costco", name:"Costco Guelph", where:"19 Elmira Rd S", by:"Watch Guelph (community camera)", lat:43.52255, lon:-80.29492,
+    note:"A live view of the Costco store and gas bar. Check before you shop or fill up.",
+    page:"https://watchguelph.ca/costco.html", pageLabel:"watchguelph.ca",
+    embed:() => `https://player.twitch.tv/?channel=watchguelph_costco&parent=${encodeURIComponent(location.hostname || "localhost")}&muted=true&autoplay=true` },
+];
+const camMarkers = {};
+function camPopup(c){
+  // the website version plays the stream inline; the Claude preview can't embed other sites, so it links out
+  const player = LIVE ? `<div class="frame"><iframe src="${c.embed()}" title="${esc(c.name)} live camera" allow="autoplay; fullscreen" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe></div>`
+                      : `<a class="camlink" href="${c.page}" target="_blank" rel="noopener">Watch live on ${c.pageLabel}</a>`;
+  return `<h4>${esc(c.name)}</h4><p>${esc(c.where)} · ${esc(c.note)}</p>${player}<div class="src"><span>Camera: ${esc(c.by)}</span><a href="${c.page}" target="_blank" rel="noopener">Source</a></div>`; }
+function setupCameras(){
+  $("camList").innerHTML = CAMERAS.map(c => `<button class="camrow" data-cam="${c.id}">${iconSVG("camera", CAM_COLOR)}<span><b>${esc(c.name)}</b><small>${esc(c.where)} · ${esc(c.by)}</small></span><span class="go">Watch</span></button>`).join("");
+  $("camList").querySelectorAll(".camrow").forEach(b => b.onclick = () => openCam(b.dataset.cam, true));
+  for(const c of CAMERAS){
+    const mk = L.marker([c.lat, c.lon], {icon:L.divIcon({className:"", html:iconSVG("camera", CAM_COLOR, 32).replace('class="ico"','class="ico" style="width:32px;height:32px;filter:drop-shadow(0 1px 3px rgba(0,0,0,.4))"'), iconSize:[32,32], iconAnchor:[16,16]}), zIndexOffset:900, keyboard:true, title:c.name+" live camera"})
+      .bindPopup(() => camPopup(c), {className:"campop", maxWidth:380, minWidth:260, autoPanPaddingTopLeft:[20,60]})
+      .bindTooltip(`<b>${esc(c.name)}</b><br>Live camera · tap to watch`, {className:"tt", direction:"top", offset:[0,-16]});
+    mk.on("popupclose", e => { const f = e.popup.getElement()?.querySelector("iframe"); if(f) f.src = "about:blank"; });   // stop streaming when closed
+    mk.addTo(map); camMarkers[c.id] = mk; }
+}
+function openCam(id, fly){ const c = CAMERAS.find(x => x.id===id), mk = camMarkers[id]; if(!c || !mk) return;
+  if(S.mode==="census") setMode("walk");
+  if(fly){ map.setView([c.lat, c.lon], Math.max(map.getZoom(), 16)); if(matchMedia("(max-width:760px)").matches) $("map").scrollIntoView({behavior:"smooth"}); }
+  mk.openPopup(); }
+
 function startLive(){
   if(!LIVE) return;
   $("liveBody").innerHTML = ""; renderLive();
@@ -1081,6 +1136,7 @@ async function boot(){
   const ex = D.addresses.text.indexOf("1 Carden Street");
   updateLegend();
   select(ex >= 0 ? ex : 0, {sample:true});
+  setupCameras();
   startLive();
 }
 boot();
