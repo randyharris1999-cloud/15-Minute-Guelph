@@ -102,6 +102,11 @@ header p{margin:6px 0 0;color:var(--muted);font-size:13px}
 .alts small{display:block;color:var(--muted);font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .alts .t{font-family:var(--f-mono);font-size:12px;align-self:center}
 .alts .rest{padding:4px 6px;font-size:11px;color:var(--muted)}
+.linkbtn{border:0;background:none;padding:0;font:inherit;font-weight:600;color:var(--accent-text);cursor:pointer;text-decoration:underline;text-underline-offset:2px}
+.bigtree{position:relative;width:34px;height:34px}
+.bigtree svg{width:34px;height:34px;filter:drop-shadow(0 1px 3px rgba(0,0,0,.4))}
+.bigtree::after{content:"";position:absolute;inset:-6px;border-radius:50%;border:2px solid #2E6B1F;opacity:.7}
+@media (prefers-reduced-motion:no-preference){.bigtree::after{animation:treepulse 2.4s ease-out infinite}@keyframes treepulse{0%{transform:scale(.8);opacity:.8}100%{transform:scale(1.5);opacity:0}}}
 .row:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
 .dot{width:10px;height:10px;border-radius:50%}
 .row{grid-template-columns:22px 1fr auto!important}
@@ -362,7 +367,7 @@ class Heap{ constructor(){this.k=[];this.v=[];}
 /* ---------- state ---------- */
 const S = { mode:"walk", walkMin:15, day:"weekday", dep:8*3600, busMin:30, sel:null, dist:null, pred:null, tt:null, route:null, focusCat:null };
 let D = {};      // decoded data
-let map, base, originMarker, tagLayer;
+let map, base, originMarker, tagLayer, bigTreeMarker;
 
 /* ---------- data loading ---------- */
 async function load(){
@@ -601,6 +606,11 @@ function drawAll(ctx,X,Y,z,size){
   }
   if(typeof drawLive==="function") drawLive(ctx,X,Y,z);
   drawLabels(ctx,X,Y,z,size,C);
+  if(S.focusCat==="trees" && S.report && !cityWide()){ const r=S.report, i=S.sel.i, cx=X(D.amx[i]), cy=Y(D.amy[i]);
+    const rpx = Math.abs(Y(mercY(D.addresses.lat[i]/1e5 + 100/110574)) - cy);
+    ctx.beginPath(); ctx.arc(cx, cy, rpx, 0, 6.2832); ctx.fillStyle="rgba(79,127,42,.10)"; ctx.fill(); ctx.setLineDash([6,5]); ctx.lineWidth=2; ctx.strokeStyle="#4F7F2A"; ctx.stroke(); ctx.setLineDash([]);
+    const tr = Math.max(3.5, Math.min(7, 2.4*Math.pow(2, z-16)));
+    for(const j of r.trees){ ctx.beginPath(); ctx.arc(X(D.tmx[j]), Y(D.tmy[j]), tr, 0, 6.2832); ctx.fillStyle="#5B8A3A"; ctx.fill(); ctx.lineWidth=1.5; ctx.strokeStyle=C.panel; ctx.stroke(); } }
   // selected route
   if(S.route && !cityWide()){ ctx.beginPath(); ctx.moveTo(X(S.route[0][0]),Y(S.route[0][1])); for(const [x,y] of S.route) ctx.lineTo(X(x),Y(y));
     ctx.strokeStyle=C.panel; ctx.lineWidth=Math.max(6,8*sc); ctx.stroke(); ctx.strokeStyle=C.ink; ctx.lineWidth=Math.max(3,4*sc); ctx.setLineDash([1, Math.max(6,7*sc)]); ctx.stroke(); ctx.setLineDash([]); }
@@ -703,9 +713,10 @@ function select(i, opts={}){
   // trees
   const tc = {}; r.trees.forEach(j => { const s = D.trees.species[D.trees.sp[j]]; tc[s]=(tc[s]||0)+1; });
   const top = Object.entries(tc).sort((a,b)=>b[1]-a[1]).slice(0,6);
-  let big = -1; r.trees.forEach(j => { if(big<0 || D.trees.dbh[j] > D.trees.dbh[big]) big=j; });
+  let big = -1; r.trees.forEach(j => { if(big<0 || D.trees.dbh[j] > D.trees.dbh[big]) big=j; }); r.bigTree = big;
   $("tCount").textContent = r.trees.length;
-  $("tText").textContent = r.trees.length ? `Biggest: a ${D.trees.species[D.trees.sp[big]].toLowerCase()}, ${D.trees.dbh[big]} cm across the trunk.` : "No City-owned street trees recorded nearby.";
+  $("tText").innerHTML = r.trees.length ? `Biggest: a ${esc(D.trees.species[D.trees.sp[big]].toLowerCase())}, ${D.trees.dbh[big]} cm across the trunk. <button class="linkbtn" id="showBig">Show on map</button>` : "No City-owned street trees recorded nearby.";
+  if(r.trees.length) $("showBig").onclick = showBigTree;
   $("tSpecies").innerHTML = top.map(([s,n]) => `<span>${esc(s)} · ${n}</span>`).join("");
   renderDeps(); if(typeof snowNear==="function") snowNear();
   if(S.mode==="bus") runBus(); else if(S.mode==="walk") runWalk();
@@ -723,8 +734,13 @@ function focusCat(k){
 function focusItem(k, idx){ S.focusIdx = idx;
   document.querySelectorAll(`.grp[data-k="${k}"] .alts button`).forEach(x => x.classList.toggle("on", +x.dataset.i===idx));
   routeTo(k, idx); }
+function showBigTree(){ const r=S.report; if(!r || r.bigTree<0) return; if(S.focusCat!=="trees") focusCat("trees");
+  const j=r.bigTree; map.setView([D.trees.lat[j]/1e5, D.trees.lon[j]/1e5], 18); if(bigTreeMarker) bigTreeMarker.openTooltip();
+  if(matchMedia("(max-width:760px)").matches) $("map").scrollIntoView({behavior:"smooth"}); }
 function routeTo(k, idx){
   S.route = null; const r = S.report;
+  if(k==="trees" && S.focusCat==="trees"){ const A=D.addresses, i=S.sel.i, lat=A.lat[i]/1e5, lon=A.lon[i]/1e5, dl=100/110574, dn=100/(111320*Math.cos(lat*Math.PI/180));
+    map.fitBounds([[lat-dl, lon-dn],[lat+dl, lon+dn]], {padding:[30,30], maxZoom:18}); tags(); base.draw(); return; }
   if(S.focusCat){ let node=null, target=null; const pick = r.lists[k] && r.lists[k][idx];
     if(pick){ node = pick.node; target = pick.it; }
     else if(r.near[k]){ node = r.near[k].node; target = r.near[k].it; }
@@ -736,8 +752,12 @@ function routeTo(k, idx){
 }
 function unmerc(x,y){ const lon=x*360-180; const n=Math.PI-2*Math.PI*y; return [180/Math.PI*Math.atan(.5*(Math.exp(n)-Math.exp(-n))), lon]; }
 function tags(){
-  if(tagLayer) tagLayer.remove(); tagLayer = L.layerGroup().addTo(map);
+  if(tagLayer) tagLayer.remove(); tagLayer = L.layerGroup().addTo(map); bigTreeMarker = null;
   if(!S.report || cityWide()) return; const r=S.report;
+  if(r.bigTree >= 0){ const j=r.bigTree, sp=D.trees.species[D.trees.sp[j]];
+    bigTreeMarker = L.marker([D.trees.lat[j]/1e5, D.trees.lon[j]/1e5], {icon:L.divIcon({className:"", html:`<div class="bigtree">${iconSVG("trees", "#2E6B1F", 34)}</div>`, iconSize:[34,34], iconAnchor:[17,17]}), zIndexOffset:700, keyboard:true, title:"Biggest street tree nearby"})
+      .bindTooltip(`<b>Biggest street tree within 100 m</b><br>${esc(sp)} · ${D.trees.dbh[j]} cm trunk diameter`, {className:"tt", direction:"top", offset:[0,-18]})
+      .on("click", () => { if(S.focusCat!=="trees") focusCat("trees"); }).addTo(tagLayer); }
   const fk = S.focusCat, fl = fk && r.lists[fk];
   if(fl && fl.length > 1){   // a category is open: show everything within 15 min, the chosen one in full
     const col = fk==="bus" ? BUS_COLOR : CAT[fk].color;
