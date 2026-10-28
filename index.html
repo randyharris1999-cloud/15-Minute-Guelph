@@ -88,6 +88,20 @@ header p{margin:6px 0 0;color:var(--muted);font-size:13px}
 .rows{display:flex;flex-direction:column;border-top:1px solid var(--rule)}
 .row{display:grid;grid-template-columns:12px 1fr auto;gap:10px;align-items:center;padding:8px 2px;border-bottom:1px solid var(--rule);cursor:pointer;background:none;border-left:0;border-right:0;border-top:0;color:inherit;font:inherit;text-align:left;width:100%}
 .row:hover,.row.on{background:var(--chip)}
+.grp{border-bottom:1px solid var(--rule)}
+.grp>.row{border-bottom:0}
+.more{display:flex;align-items:center;gap:4px;margin-top:3px;font-size:11px;font-weight:600;color:var(--accent-text)}
+.more svg{transition:transform .15s}
+.grp.open .more svg{transform:rotate(180deg)}
+.alts{list-style:none;margin:0 0 6px;padding:0 0 0 34px;display:flex;flex-direction:column}
+.alts button{display:grid;grid-template-columns:1fr auto;gap:10px;width:100%;padding:6px 6px;border:0;border-radius:6px;background:none;color:inherit;font:inherit;text-align:left;cursor:pointer;opacity:.6}
+.alts button:hover,.alts button:focus-visible{opacity:1;background:var(--chip)}
+.alts button:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.alts button.on{opacity:1;background:var(--chip);box-shadow:inset 3px 0 0 var(--accent)}
+.alts b{font-weight:600;font-size:13px}
+.alts small{display:block;color:var(--muted);font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.alts .t{font-family:var(--f-mono);font-size:12px;align-self:center}
+.alts .rest{padding:4px 6px;font-size:11px;color:var(--muted)}
 .row:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
 .dot{width:10px;height:10px;border-radius:50%}
 .row{grid-template-columns:22px 1fr auto!important}
@@ -202,7 +216,7 @@ footer{font-size:11px;color:var(--muted);margin-top:auto}
     </section>
 
     <section class="sec" id="secNear" hidden>
-      <h3>Nearest, on foot <em>tap a row for the route</em></h3>
+      <h3>Within a 15-minute walk <em>tap a row to see them all</em></h3>
       <div class="rows" id="rows"></div>
     </section>
 
@@ -453,6 +467,19 @@ function analyse(i){
   near.restroom = best(D.pts.restroom, r => [[r.node, r.conn]]);
   OSM_CATS.forEach(c => near[c] = best(D.pts[c], x => [[x.node, x.conn]]));
   near.aed = best(D.pts.aed, x => [[x.node, x.conn]]) || {it:{name:"None loaded", mx:0, my:0}, node:0, d:Infinity};
+  // everything within a 15-minute walk, nearest first (the nearest is always first, even if it's further)
+  const LIM = 15*WALK, lists = {};
+  const listOf = (items, getNodes) => items.map(it => { let bd=Infinity, bn=-1; for(const [n,c] of getNodes(it)){ const d=dist[n]+c; if(d<bd){bd=d;bn=n;} } return {it, node:bn, d:bd}; })
+      .filter(x => x.d <= LIM).sort((a,b) => a.d-b.d);
+  lists.park = listOf(D.parks, p => p.access.map(a=>[a,0]));
+  lists.school = listOf(D.pts.school.filter(s => ["Elementary","Montessori","Waldorf"].includes(s.extra[0])), s => [[s.node, s.conn]]);
+  lists.community = listOf(D.pts.facility.filter(f => ["Library","Community Centre","Seniors Centre"].includes(f.extra)), f => [[f.node, f.conn]]);
+  lists.garden = listOf(D.pts.garden, g => [[g.node, g.conn]]);
+  lists.restroom = listOf(D.pts.restroom, r => [[r.node, r.conn]]);
+  OSM_CATS.forEach(c => lists[c] = listOf(D.pts[c], x => [[x.node, x.conn]]));
+  lists.aed = listOf(D.pts.aed, x => [[x.node, x.conn]]);
+  lists.bus = listOf(D.stops.map((st, si) => ({...st, si, addr: [...routesAtStop(si)].map(ri => D.transit.routes[ri][0]).sort((a,b) => parseInt(a)-parseInt(b) || a.localeCompare(b)).join(", ")})), st => [[st.node, st.conn]]);
+  for(const k in lists){ const n = near[k]; if(n && isFinite(n.d) && (!lists[k].length || lists[k][0].it !== n.it)) lists[k].unshift(n); }
   let score = 0; const parts = {};
   for(const k in CAT){ const t = near[k].d / WALK; const pts = CAT[k].w ? CAT[k].w * lin(t, CAT[k].full, CAT[k].zero) : 0; parts[k] = {t, pts}; score += pts; }
   // buses: distinct midday weekday trips at stops within 400 m walk
@@ -464,7 +491,7 @@ function analyse(i){
   const x = D.ax[i], y = D.ay[i]; const tl = [];
   for(let gx=-1;gx<=1;gx++) for(let gy=-1;gy<=1;gy++){ const a = D.tgrid.get((Math.floor(x/100)+gx)+":"+(Math.floor(y/100)+gy)); if(a) for(const j of a){ const dx=D.tx[j]-x, dy=D.ty[j]-y; if(dx*dx+dy*dy<=10000) tl.push(j); } }
   const treePts = TREE_W * Math.min(1, tl.length / 30); score += treePts;
-  return {i, near, parts, score:Math.round(score), nearStops, tph, busPts, trees:tl, treePts};
+  return {i, near, parts, lists, score:Math.round(score), nearStops, tph, busPts, trees:tl, treePts};
 }
 
 /* ---------- transit reach (connection scan) ---------- */
@@ -643,7 +670,7 @@ function updateLegend(){
 
 /* ---------- UI ---------- */
 function select(i, opts={}){
-  S.sel = {i}; S.sample = !!opts.sample; S.route = null; S.focusCat = null; S.tt = null; S.reached = null;
+  S.sel = {i}; S.sample = !!opts.sample; S.route = null; S.focusCat = null; S.focusIdx = 0; S.tt = null; S.reached = null;
   const r = S.report = analyse(i);
   const A = D.addresses, lat = A.lat[i]/1e5, lon = A.lon[i]/1e5;
   if(!originMarker) originMarker = L.marker([lat,lon], {icon:L.divIcon({className:"", html:'<div class="pin"></div>', iconSize:[18,18], iconAnchor:[9,9]}), keyboard:false, interactive:false, zIndexOffset:1000}).addTo(map);
@@ -660,9 +687,19 @@ function select(i, opts={}){
   const items = Object.keys(CAT).map(k => ({k, label:CAT[k].label, sub: r.near[k].it.name + (k==="park" && r.near[k].it.addr ? " · " + r.near[k].it.addr : k!=="trail" && r.near[k].it.addr ? " · " + r.near[k].it.addr : ""), pts:r.parts[k].pts, w:CAT[k].w, color:CAT[k].color, glyph:glyphFor(k, r.near[k].it), val: isFinite(r.parts[k].t) ? Math.max(1,Math.round(r.parts[k].t)) + " min" : "–"}));
   items.splice(1, 0, busRow);
   items.push({k:"trees", label:"Street trees", sub:`${r.trees.length} within 100 m`, pts:r.treePts, w:TREE_W, color:"#4F7F2A", glyph:"trees", val:r.trees.length+""});
-  for(const it of items){ const b=document.createElement("button"); b.className="row"; b.dataset.k=it.k;
-    b.innerHTML = `${iconSVG(it.glyph, it.color)}<span class="lbl"><b>${it.label}</b><div>${esc(it.sub)}</div></span><span class="val">${it.val}${it.w ? `<div class="meter" title="${it.pts.toFixed(1)} of ${it.w} points"><i style="width:${(it.pts/it.w*100).toFixed(0)}%"></i></div>` : `<div style="font-size:10px;color:var(--muted)">info only</div>`}</span>`;
-    b.onclick = () => focusCat(it.k); rows.appendChild(b); }
+  const CHEV = `<svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><path d="M2 3.5l3 3 3-3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+  for(const it of items){ const g=document.createElement("div"); g.className="grp"; g.dataset.k=it.k;
+    const list = r.lists[it.k] || [], within = list.filter(x => x.d <= 15*WALK).length, extra = list.length - 1;
+    const moreTxt = extra > 0 ? `${extra} more within 15 min` : (it.k==="trail" || it.k==="trees" ? "" : within ? "only one within 15 min" : "none within 15 min");
+    const b=document.createElement("button"); b.className="row"; b.dataset.k=it.k; if(extra > 0) b.setAttribute("aria-expanded","false");
+    b.innerHTML = `${iconSVG(it.glyph, it.color)}<span class="lbl"><b>${it.label}</b><div>${esc(it.sub)}</div>${moreTxt ? `<span class="more">${extra>0 ? CHEV : ""}${moreTxt}</span>` : ""}</span><span class="val">${it.val}${it.w ? `<div class="meter" title="${it.pts.toFixed(1)} of ${it.w} points"><i style="width:${(it.pts/it.w*100).toFixed(0)}%"></i></div>` : `<div style="font-size:10px;color:var(--muted)">info only</div>`}</span>`;
+    b.onclick = () => focusCat(it.k); g.appendChild(b);
+    if(extra > 0){ const ul=document.createElement("ul"); ul.className="alts"; ul.hidden=true; const MAX=25;
+      ul.innerHTML = list.slice(1, MAX+1).map((x, j) => `<li><button data-i="${j+1}"><span><b>${esc(x.it.name)}</b>${x.it.addr ? `<small>${it.k==="bus" ? "Routes " : ""}${esc(x.it.addr)}</small>` : ""}</span><span class="t">${Math.max(1,Math.round(x.d/WALK))} min</span></button></li>`).join("")
+        + (extra > MAX ? `<li class="rest">and ${extra-MAX} more</li>` : "");
+      ul.querySelectorAll("button").forEach(x => x.onclick = () => focusItem(it.k, +x.dataset.i));
+      g.appendChild(ul); }
+    rows.appendChild(g); }
   // trees
   const tc = {}; r.trees.forEach(j => { const s = D.trees.species[D.trees.sp[j]]; tc[s]=(tc[s]||0)+1; });
   const top = Object.entries(tc).sort((a,b)=>b[1]-a[1]).slice(0,6);
@@ -678,11 +715,19 @@ function select(i, opts={}){
 }
 function esc(s){ return String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
 function focusCat(k){
-  S.focusCat = (S.focusCat===k)? null : k;
-  document.querySelectorAll(".row").forEach(b => b.classList.toggle("on", b.dataset.k===S.focusCat));
+  S.focusCat = (S.focusCat===k)? null : k; S.focusIdx = 0;
+  document.querySelectorAll(".grp").forEach(g => { const on = g.dataset.k===S.focusCat, ul = g.querySelector(".alts"), b = g.querySelector(".row");
+    g.classList.toggle("open", on && !!ul); b.classList.toggle("on", on); if(ul){ ul.hidden = !on; b.setAttribute("aria-expanded", on); ul.querySelectorAll("button").forEach(x => x.classList.remove("on")); } });
+  routeTo(k, 0);
+}
+function focusItem(k, idx){ S.focusIdx = idx;
+  document.querySelectorAll(`.grp[data-k="${k}"] .alts button`).forEach(x => x.classList.toggle("on", +x.dataset.i===idx));
+  routeTo(k, idx); }
+function routeTo(k, idx){
   S.route = null; const r = S.report;
-  if(S.focusCat){ let node=null, target=null;
-    if(r.near[k]){ node = r.near[k].node; target = r.near[k].it; }
+  if(S.focusCat){ let node=null, target=null; const pick = r.lists[k] && r.lists[k][idx];
+    if(pick){ node = pick.node; target = pick.it; }
+    else if(r.near[k]){ node = r.near[k].node; target = r.near[k].it; }
     else if(k==="bus" && r.nearStops.length){ const s=D.stops[r.nearStops[0][0]]; node=s.node; target=s; }
     if(node!=null){ const path = pathTo(node); if(target && k!=="trail") path.push([target.mx,target.my]); if(path.length>1){ S.route=path;
         const b = L.latLngBounds(path.map(([x,y]) => unmerc(x,y))); b.extend(originMarker.getLatLng()); map.fitBounds(b.pad(.25), {maxZoom:17}); } } }
@@ -693,6 +738,14 @@ function unmerc(x,y){ const lon=x*360-180; const n=Math.PI-2*Math.PI*y; return [
 function tags(){
   if(tagLayer) tagLayer.remove(); tagLayer = L.layerGroup().addTo(map);
   if(!S.report || cityWide()) return; const r=S.report;
+  const fk = S.focusCat, fl = fk && r.lists[fk];
+  if(fl && fl.length > 1){   // a category is open: show everything within 15 min, the chosen one in full
+    const col = fk==="bus" ? BUS_COLOR : CAT[fk].color;
+    fl.slice(0, 60).forEach((x, j) => { const on = j === (S.focusIdx||0), sz = on ? 32 : 24, ll = unmerc(x.it.mx, x.it.my);
+      L.marker(ll, {icon:L.divIcon({className:"", html:iconSVG(fk==="bus" ? "bus" : glyphFor(fk, x.it), col, sz).replace('class="ico"', `class="ico" style="width:${sz}px;height:${sz}px;opacity:${on?1:.55};filter:drop-shadow(0 1px 3px rgba(0,0,0,.35))"`), iconSize:[sz,sz], iconAnchor:[sz/2,sz/2]}), keyboard:false, zIndexOffset: on ? 800 : 0})
+        .bindTooltip(`<b>${esc(x.it.name)}</b><br>${Math.max(1,Math.round(x.d/WALK))} min walk`, {className:"tt", direction:"top", offset:[0,-sz/2]})
+        .on("click", () => focusItem(fk, j)).addTo(tagLayer); });
+    return; }
   for(const k of ["grocery","park","school","pharmacy","health","community","food","playground","garden","restroom","aed"]){ const it=r.near[k].it; if(!it || !isFinite(r.near[k].d)) continue;
     const ll = unmerc(it.mx, it.my);
     L.marker(ll, {icon:L.divIcon({className:"", html:iconSVG(glyphFor(k,it), CAT[k].color, 30).replace('class="ico"','class="ico" style="filter:drop-shadow(0 1px 3px rgba(0,0,0,.35));width:30px;height:30px"'), iconSize:[30,30], iconAnchor:[15,15]}), keyboard:false}).bindTooltip(`<b>${esc(it.name)}</b><br>${CAT[k].label} · ${Math.max(1,Math.round(r.parts[k].t))} min walk`, {className:"tt", direction:"top", offset:[0,-14]}).on("click", () => focusCat(k)).addTo(tagLayer); }
