@@ -9,6 +9,7 @@ Search any Guelph address to get:
 - **Next departures within a 5-minute walk.** These use live arrival predictions and show service alerts.
 - **Live buses** on the map, updated every 15 seconds.
 - **Live City layers:** amenities, AED defibrillators, road closures and sidewalk snow clearing.
+- **An "About this area" summary**: a description built from zoning, lot sizes, buildings, census and nearby amenities, with a 7-axis area profile chart.
 - **A city-wide score map and a Census view** that links access to income, age, renting and commuting in each of Guelph's 201 census neighbourhoods.
 
 ## What's in the folder
@@ -34,6 +35,7 @@ Search any Guelph address to get:
 | Bus positions, predictions, alerts | Guelph Transit GTFS-realtime, through the Cloudflare relay | Live, every 15 to 120 s |
 | Grocery stores, pharmacies, clinics, cafés, playgrounds | © OpenStreetMap contributors (ODbL) | At build time |
 | Population, income, age, renting, commuting | Statistics Canada, 2021 Census of Population, dissemination areas | At build time |
+| Parcel fabric (lot sizes), 2023 zoning, named Guelph areas, wards | City of Guelph Open Data | At build time |
 
 ## Rebuilding the data
 
@@ -43,7 +45,8 @@ The `scripts/` folder holds the pipeline:
 2. `build_data.py` snaps places, trees and transit to the network and scores every address.
 3. `build_extra.py` prepares buildings, water and street names.
 4. `build_census.py` joins the census data.
-5. `build_html.py` assembles the page.
+5. `build_parcels.py` joins parcels, zoning, named areas and wards to every address (`data/area.json`) for the "About this area" description.
+6. `build_html.py` assembles the page.
 
 The file paths at the top of each script point to where they were first run, so edit them to match your folders. Rebuild when Guelph Transit publishes a new schedule (usually September and January) or when you want fresher OpenStreetMap shops.
 

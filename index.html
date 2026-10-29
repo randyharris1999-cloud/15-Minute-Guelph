@@ -234,7 +234,7 @@ footer{font-size:11px;color:var(--muted);margin-top:auto}
 
     <section class="sec" id="secArea" hidden>
       <h3>About this area</h3>
-      <p class="area-text" id="areaText"></p>
+      <div id="areaText"><p class="area-text"></p></div>
       <div class="radar-wrap"><svg id="radar" viewBox="0 0 400 290" role="img" aria-label="Area profile chart"></svg></div>
       <div class="radar-key" id="radarKey"></div>
     </section>
@@ -390,7 +390,7 @@ let map, base, originMarker, tagLayer, bigTreeMarker;
 
 /* ---------- data loading ---------- */
 async function load(){
-  const names = ["graph","places","addresses","trees","transit","buildings","water","streetnames","census"];
+  const names = ["graph","places","addresses","trees","transit","buildings","water","streetnames","census","area"];
   const res = await Promise.all(names.map(n => fetch("data/" + n + ".json").then(r => { if(!r.ok) throw new Error(n); return r.json(); })));
   names.forEach((n,i) => D[n] = res[i]);
   decode();
@@ -772,29 +772,93 @@ function areaProfile(r){
   for(const k in sc) sc[k] = cl(sc[k]);
   return {sc, reach, amen, culture, typesHere, nTypes:types.length};
 }
+function areaContext(r){
+  const i = r.i, mx = D.amx[i], my = D.amy[i], M = 40075016.686 * Math.cos(LAT0*Math.PI/180);   // metres per mercator unit
+  const R = 150 / M; let n = 0, area = 0;
+  for(const b of D.bld){ if(b.x1 < mx-R || b.x0 > mx+R || b.y1 < my-R || b.y0 > my+R) continue;
+    const cx = (b.x0+b.x1)/2 - mx, cy = (b.y0+b.y1)/2 - my; if(cx*cx+cy*cy > R*R) continue;
+    let a = 0; const {xs,ys} = b; for(let k=0,j=xs.length-1;k<xs.length;j=k++) a += (xs[j]+xs[k])*(ys[j]-ys[k]);
+    n++; area += Math.abs(a/2)*M*M; }
+  let water = null;
+  for(const w of D.wat){ if(!w.name) continue; for(const [xs,ys] of w.rings) for(let k=0;k<xs.length;k++){ const d = Math.hypot(xs[k]-mx, ys[k]-my)*M; if(!water || d < water.d) water = {name:w.name, d}; } }
+  const lat = D.addresses.lat[i]/1e5, lon = D.addresses.lon[i]/1e5, da = daAt(lat, lon);
+  if(!D.cityMed){ const med = k => { const v = D.das.map(a=>a[k]).filter(v=>v!=null && v>0).sort((a,b)=>a-b); return v[Math.floor(v.length/2)]; };
+    D.cityMed = {age:med("age"), income:med("income")}; }
+  const Z = D.area || {}, zi = Z.zone ? Z.zone[i] : -1, ai = Z.area ? Z.area[i] : -1, wi = Z.ward ? Z.ward[i] : -1;
+  return {n, avg: n ? area/n : 0, water, da, city:D.cityMed,
+    zone: zi >= 0 ? Z.zones[zi] : null, areaName: ai >= 0 ? Z.areas[ai] : null, ward: wi >= 0 ? Z.wards[wi] : null,
+    lot: Z.lot ? Z.lot[i] : 0, units: Z.units ? Z.units[i] : 0, near: Z.near ? Z.near[i] : 0, cityLot: Z.city_lot_median || 0};
+}
 function areaText(r, P){
-  const s = P.sc, avg = AXES.reduce((a,[k]) => a + s[k], 0) / AXES.length;
-  const name = k => ({mixed:"shops and services", access:"daily essentials", transit:"bus service", walk:"walking access",
-    green:"parks and trails", sustain:"street trees", culture:"libraries and rec centres"})[k];
-  const ranked = AXES.map(([k]) => k).sort((a,b) => s[b]-s[a]);
-  const strong = ranked.filter(k => s[k] >= 65).slice(0,3), weak = ranked.filter(k => s[k] < 45 && !(k==="transit" && !r.nearStops.length)).reverse().slice(0,2);
+  const s = P.sc, C = areaContext(r), d = C.da, cm = C.city;
+  const pct = v => Math.round(v) + "%", money = v => "$" + Math.round(v/1000) + "k", m2 = v => Math.round(v).toLocaleString() + " m²";
   const list = a => a.length < 2 ? a.join("") : a.slice(0,-1).join(", ") + " and " + a[a.length-1];
-  const setting = avg >= 75 ? "a busy, well-connected part of Guelph" : avg >= 58 ? "a well-served Guelph neighbourhood"
-    : avg >= 40 ? "a mostly residential part of Guelph" : "a quieter, car-oriented edge of Guelph";
-  const mix = s.mixed >= 70 ? "a strong mix of food, retail and personal services" : s.mixed >= 45 ? "a moderate mix of shops and services" : "few shops or services";
-  let t = `This address sits in ${setting}, with ${mix} within a 15-minute walk (${P.typesHere} of ${P.nTypes} everyday place types, ${P.amen} places in all).`;
-  const g = Math.max(1, Math.round(r.near.grocery.d/WALK)), ess = s.access;
-  t += ess >= 70 && g <= 12 ? ` Daily needs are well covered: the nearest grocery store is about ${g} minutes away on foot.`
-     : ess >= 50 ? ` Some daily needs are close by, but others take a longer walk; the nearest grocery store is about ${g} minutes on foot.`
+  const out = [];
+  // ---- 1. the place: named area, zoning, lot sizes, water
+  const [code="", desc="", type=""] = C.zone || [];
+  const ratio = C.near && C.cityLot ? C.near / C.cityLot : 0;
+  const lotWord = ratio === 0 ? "" : ratio < .85 ? "small" : ratio < 1.3 ? "mid-sized" : ratio < 2.2 ? "generous" : "large";
+  const base = code.split(".")[0];
+  let setting;
+  if(type === "Residential" && base === "RL") setting = `a low-density residential neighbourhood of mostly detached and semi-detached homes${lotWord ? ` on ${lotWord} lots` : ""}`;
+  else if(type === "Residential" && base === "RM") setting = "a medium-density residential area of townhouses and low-rise apartments";
+  else if(type === "Residential" && base === "RH") setting = "a high-density residential area of apartment buildings";
+  else if(type === "Downtown") setting = "Guelph's downtown core, a dense mix of shops, offices, institutions and apartments";
+  else if(type === "Mixed Use" || type === "Commercial") setting = ({MUC:"a mixed-use corridor where shops and services line the street alongside housing",
+      CMUC:"a commercial mixed-use centre of larger stores, plazas and newer apartments", NCC:"a neighbourhood commercial centre serving the surrounding streets",
+      MOC:"a mixed office and commercial area", CC:"a small convenience-commercial site within a residential area", SC:"a service-commercial area along a busier road"})[base] || "a commercial area";
+  else if(type === "Employment") setting = ({B:"an industrial employment area", BP:"a corporate business park", IRP:"an institutional and research park", MB:"a mixed business area"})[base] || "an employment area";
+  else if(type === "Institutional") setting = code === "I.2" ? "the University of Guelph lands" : base === "NI" ? "a neighbourhood institutional site, such as a school, place of worship or community building" : "a major institutional site";
+  else if(/^Open Space/.test(type)) setting = "parkland and open space";
+  else if(type === "Natural Heritage System") setting = "the city's Natural Heritage System of protected woodlands, wetlands and valleys";
+  else if(type === "Urban Reserve") setting = "land held in reserve for future urban development";
+  else setting = C.n >= 90 && C.avg < 220 ? "a compact neighbourhood of closely spaced homes" : C.avg > 1800 ? "an area of large commercial, institutional or industrial buildings" : "a residential area";
+  const place = C.areaName && !/^Non-Residential/.test(C.areaName) ? C.areaName : null;
+  const ward = C.ward ? `Ward ${C.ward[0]}` : "";
+  let t = place ? `This address is in ${place}${ward ? ` (${ward})` : ""}, ${setting}.` : `This address is in ${setting}${ward ? `, in ${ward}` : ""}.`;
+  if(C.near && (type === "Residential" || type === "Downtown" || type === "Mixed Use")){
+    const cmp = ratio < .85 ? `about ${Math.round((1-ratio)*100)}% smaller than` : ratio > 1.15 ? (ratio >= 1.9 ? `roughly ${ratio.toFixed(1)} times` : `about ${Math.round((ratio-1)*100)}% larger than`) : "close to";
+    t += ` Typical house lots nearby are about ${m2(C.near)}, ${cmp} Guelph's median of ${m2(C.cityLot)}.`;
+  }
+  if(desc){
+    const kind = type === "Residential" ? ", typical of a townhouse or apartment complex" : /Downtown|Mixed Use|Commercial/.test(type) ? ", likely a plaza or mixed-use building" : "";
+    if(C.units > 1) t += ` The property is zoned ${desc} (${code}) and is shared by ${C.units} addresses on ${C.lot >= 10000 ? (C.lot/10000).toFixed(1) + " ha" : m2(C.lot)}${kind}.`;
+    else if(C.lot) t += ` The property is zoned ${desc} (${code}) and sits on a lot of about ${C.lot >= 10000 ? (C.lot/10000).toFixed(1) + " ha" : m2(C.lot)}.`;
+    else t += ` The property is zoned ${desc} (${code}).`;
+  }
+  if(C.water && C.water.d <= 500) t += ` ${/River|Lake/.test(C.water.name) ? "The " : ""}${C.water.name} is about ${Math.max(1, Math.round(C.water.d/WALK))} minute${Math.round(C.water.d/WALK) > 1 ? "s'" : "'s"} walk away.`;
+  out.push(t);
+  // ---- 2. the people (census dissemination area)
+  if(d && d.pop){
+    const older = d.age >= cm.age + 4, younger = d.age <= cm.age - 4;
+    const who = younger ? "a younger population than the city overall" : older ? "an older population than the city overall" : "an age mix close to the city average";
+    const ten = d.renters >= 60 ? `Most households rent (${pct(d.renters)})` : d.renters >= 35 ? `Renters and owners are fairly evenly mixed (${pct(d.renters)} rent)` : `Most households own their homes (${pct(100-d.renters)})`;
+    const inc = d.income ? (d.income >= cm.income*1.2 ? "above" : d.income <= cm.income*0.8 ? "below" : "near") + ` the city median (${money(d.income)})` : "";
+    let p = `The surrounding census area has about ${Math.round(d.density).toLocaleString()} people per km² and ${who} (median age ${Math.round(d.age)})${d.kids >= 20 ? ", with plenty of families with children" : ""}. ${ten}${inc ? `, and household incomes are ${inc}` : ""}.`;
+    if(d.commuters) p += d.car >= 80 ? ` Most residents drive to work (${pct(d.car)}).` : ` About ${pct(d.car)} of commuters drive, ${pct(d.transit)} take transit and ${pct(d.active)} walk or cycle.`;
+    out.push(p);
+  }
+  // ---- 3. what's within reach, strengths and gaps
+  const mix = s.mixed >= 70 ? "a strong mix of food, retail and personal services" : s.mixed >= 45 ? "a moderate mix of shops and services" : "only a few shops or services";
+  let w = `Within a 15-minute walk there's ${mix} (${P.amen} places across ${P.typesHere} of ${P.nTypes} everyday types).`;
+  const g = Math.max(1, Math.round(r.near.grocery.d/WALK));
+  w += s.access >= 70 && g <= 12 ? ` Daily needs are well covered, with a grocery store about ${g} minutes away.`
+     : s.access >= 50 ? ` Some daily needs are close by, but others take a longer walk; the nearest grocery store is about ${g} minutes on foot.`
      : ` Daily errands mostly mean a long walk or a drive; the nearest grocery store is about ${g} minutes on foot.`;
   const tph = r.tph >= 10 ? Math.round(r.tph) : r.tph.toFixed(1);
-  t += r.nearStops.length ? ` Buses run about ${tph} trips an hour at midday from ${r.nearStops.length} stop${r.nearStops.length>1?"s":""} within 5 minutes.` : " There's no bus stop within a 5-minute walk.";
-  const plus = a => a.length < 2 ? a.join("") : a.slice(0,-1).join(", ") + ", plus " + a[a.length-1];
+  w += r.nearStops.length ? ` Buses run about ${tph} trips an hour at midday from ${r.nearStops.length} stop${r.nearStops.length>1?"s":""} within 5 minutes.` : " There's no bus stop within a 5-minute walk.";
+  if(r.trees.length >= 45) w += ` The streets are well treed, with ${r.trees.length} City trees within 100 m.`;
+  const name = k => ({mixed:"shops and services", access:"daily essentials", transit:"bus service", walk:"walking access",
+    green:"parks and trails", sustain:"street trees and greener travel options", culture:"libraries and rec centres"})[k];
   const weakTxt = {mixed:"shops and services are farther away", access:"everyday essentials are a longer walk", transit:"bus service is limited",
-    walk:"walking reach is limited", green:"parks are farther away", sustain:"street trees are sparse", culture:"libraries and rec centres are farther away"};
-  if(strong.length) t += ` Its strongest features are ${plus(strong.map(name))}.`;
-  if(weak.length) t += ` On the other hand, ${list(weak.map(k => weakTxt[k]))}.`;
-  return t;
+    walk:"fewer homes and places are within walking distance", green:"parks are farther away", sustain:"tree cover and greener travel options are limited", culture:"libraries and rec centres are farther away"};
+  const ranked = AXES.map(([k]) => k).sort((a,b) => s[b]-s[a]);
+  const strong = ranked.filter(k => s[k] >= 65).slice(0,3), weak = ranked.filter(k => s[k] < 45 && !(k==="transit" && !r.nearStops.length)).reverse().slice(0,2);
+  const plus = a => a.length < 2 ? a.join("") : a.slice(0,-1).join(", ") + ", plus " + a[a.length-1];
+  if(strong.length) w += strong.length > 1 ? ` Its strongest features are ${plus(strong.map(name))}.` : ` Its strongest feature is ${name(strong[0])}.`;
+  if(weak.length) w += ` On the other hand, ${list(weak.map(k => weakTxt[k]))}.`;
+  out.push(w);
+  return out;
 }
 function renderRadar(P){
   const cx=200, cy=148, R=88, n=AXES.length, ang = j => -Math.PI/2 + j*2*Math.PI/n;
@@ -811,7 +875,7 @@ function renderRadar(P){
   $("radar").innerHTML = g;
   $("radarKey").innerHTML = AXES.map(([k,l]) => `<div><span>${l}</span><b>${P.sc[k]}</b></div>`).join("");
 }
-function renderArea(r){ const P = areaProfile(r); $("areaText").textContent = areaText(r, P); renderRadar(P); $("secArea").hidden = false; }
+function renderArea(r){ const P = areaProfile(r); $("areaText").innerHTML = areaText(r, P).map(p => `<p class="area-text">${esc(p)}</p>`).join(""); renderRadar(P); $("secArea").hidden = false; }
 function esc(s){ return String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
 function focusCat(k){
   S.focusCat = (S.focusCat===k)? null : k; S.focusIdx = 0;
