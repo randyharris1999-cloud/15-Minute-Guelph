@@ -324,6 +324,9 @@ const CAT = {
   playground:{label:"Playground",           w:4,  full:5,  zero:15, color:"#D9A400"},
   garden:    {label:"Community garden",     w:1,  full:10, zero:20, color:"#B04F86"},
   restroom:  {label:"Public restroom",      w:1,  full:10, zero:20, color:"#3A78B5"},
+  childcare: {label:"Child care",           w:0,  full:10, zero:20, color:"#9B59B6"},
+  sport:     {label:"Sports field or court",w:0,  full:10, zero:20, color:"#1E8E5A"},
+  program:   {label:"Community program",    w:0,  full:10, zero:20, color:"#C2185B"},
   aed:       {label:"Defibrillator (AED)",  w:0,  full:5,  zero:15, color:"#D7263D"},
 };
 // 24-unit line glyphs drawn white on a coloured badge (canvas via Path2D, panel via inline SVG)
@@ -341,6 +344,9 @@ const GLYPH = {
   garden:    {d:"M12 21v-8 M12 13.2C12 8.6 8.6 6.4 4.2 6.4c0 4.6 3.2 6.8 7.8 6.8z M12 11.2c0-3.8 3-5.9 7.8-5.9 0 3.8-3 5.9-7.8 5.9z"},
   restroom:  {d:"M8 6.6a1.7 1.7 0 1 1 0-3.4a1.7 1.7 0 1 1 0 3.4z M16 6.6a1.7 1.7 0 1 1 0-3.4a1.7 1.7 0 1 1 0 3.4z M6 21v-6H4.6V9.5h6.8V15H10v6 M14 21v-4.5h-2.4L14 9h4l2.4 7.5H18V21"},
   bus:       {d:"M6.5 3h11a2 2 0 0 1 2 2v11.5a1.5 1.5 0 0 1-1.5 1.5H6a1.5 1.5 0 0 1-1.5-1.5V5a2 2 0 0 1 2-2z M4.5 11h15 M7.5 21v-3 M16.5 21v-3 M7.8 14.6h.1 M16.1 14.6h.1"},
+  childcare: {d:"M4 9.5h7v7H4z M13 9.5h7v7h-7z M8.5 2.5h7v7h-7z M3 20.5h18"},
+  sport:     {d:"M12 3a9 9 0 1 1 0 18a9 9 0 1 1 0-18z M3.4 9.6c5.2 1.6 12 1.6 17.2 0 M3.4 14.4c5.2-1.6 12-1.6 17.2 0 M12 3v18"},
+  program:   {d:"M4 5.5h16v15H4z M4 10h16 M8 3v4.5 M16 3v4.5 M7.5 13.5h3 M13.5 13.5h3 M7.5 17h3"},
   aed:       {d:"M12 20s-7.6-4.6-7.6-10.1A4.3 4.3 0 0 1 12 7.4a4.3 4.3 0 0 1 7.6 2.5C19.6 15.4 12 20 12 20z M7.6 12.4h2.3l1.2-2.4 1.7 4.4 1.2-2h2.4"},
   camera:    {d:"M3.5 8.2h3.4l1.7-2.7h6.8l1.7 2.7h3.4v11h-17z M12 16.9a3.3 3.3 0 1 1 0-6.6a3.3 3.3 0 1 1 0 6.6z M17.6 10.6h.1"},
   trees:     {d:"M12 3a5.5 5.5 0 0 0-4.3 8.9A4.4 4.4 0 0 0 10 20h4a4.4 4.4 0 0 0 2.3-8.1A5.5 5.5 0 0 0 12 3z M12 13.5v7.5 M12 16.5l-2.2-1.8 M12 15l2.4-2"},
@@ -384,7 +390,7 @@ let map, base, originMarker, tagLayer, bigTreeMarker;
 
 /* ---------- data loading ---------- */
 async function load(){
-  const names = ["graph","places","addresses","trees","transit","buildings","water","streetnames","census","area"];
+  const names = ["graph","places","addresses","trees","transit","buildings","water","streetnames","census","area","extra"];
   const res = await Promise.all(names.map(n => fetch("data/" + n + ".json").then(r => { if(!r.ok) throw new Error(n); return r.json(); })));
   names.forEach((n,i) => D[n] = res[i]);
   decode();
@@ -413,6 +419,9 @@ function decode(){
   const P = D.places; D.pts = {};
   const mk = (r) => ({name:r[0], addr:r[1], lon:r[2]/1e5, lat:r[3]/1e5, node:r[4], conn:r[5], extra:r[6], mx:mercX(r[2]/1e5), my:mercY(r[3]/1e5)});
   D.pts.school = P.school.map(mk); D.pts.facility = P.facility.map(mk); D.pts.restroom = P.restroom.map(mk); D.pts.garden = P.garden.map(mk); OSM_CATS.forEach(c => D.pts[c] = P[c].map(mk)); D.pts.aed = (P.aed||[]).map(mk);
+  const EX = D.extra || {}; D.pts.childcare = (EX.childcare||[]).map(mk); D.pts.sport = (EX.sport||[]).map(mk);
+  D.pts.program = (EX.program||[]).map(r => ({...mk(r), addr: [r[1], (r[6]||"").split(" · ")[0]].filter(Boolean).join(" · ")}));
+  D.pts.health = D.pts.health.concat((EX.healthcity||[]).map(mk));
   D.parks = P.parks.map(p => { const rings = p[4].map(fl => { const xs=[],ys=[]; for(let j=0;j<fl.length;j+=2){ xs.push(mercX(fl[j]/1e5)); ys.push(mercY(fl[j+1]/1e5)); } return [xs,ys]; });
     let cx=0,cy=0,n=0; rings.forEach(r=>{ r[0].forEach((x,i)=>{cx+=x;cy+=r[1][i];n++;}); });
     return {name:p[0], addr:p[1], area:p[2], access:p[3], rings, mx:cx/n, my:cy/n}; });
@@ -485,6 +494,7 @@ function analyse(i){
   near.restroom = best(D.pts.restroom, r => [[r.node, r.conn]]);
   OSM_CATS.forEach(c => near[c] = best(D.pts[c], x => [[x.node, x.conn]]));
   near.aed = best(D.pts.aed, x => [[x.node, x.conn]]) || {it:{name:"None loaded", mx:0, my:0}, node:0, d:Infinity};
+  for(const k of ["childcare","sport","program"]) near[k] = best(D.pts[k], x => [[x.node, x.conn]]) || {it:{name:"None nearby", mx:0, my:0}, node:0, d:Infinity};
   // everything within a 15-minute walk, nearest first (the nearest is always first, even if it's further)
   const LIM = 15*WALK, lists = {};
   const listOf = (items, getNodes) => items.map(it => { let bd=Infinity, bn=-1; for(const [n,c] of getNodes(it)){ const d=dist[n]+c; if(d<bd){bd=d;bn=n;} } return {it, node:bn, d:bd}; })
@@ -496,6 +506,7 @@ function analyse(i){
   lists.restroom = listOf(D.pts.restroom, r => [[r.node, r.conn]]);
   OSM_CATS.forEach(c => lists[c] = listOf(D.pts[c], x => [[x.node, x.conn]]));
   lists.aed = listOf(D.pts.aed, x => [[x.node, x.conn]]);
+  for(const k of ["childcare","sport","program"]) lists[k] = listOf(D.pts[k], x => [[x.node, x.conn]]);
   lists.bus = listOf(D.stops.map((st, si) => ({...st, si, addr: [...routesAtStop(si)].map(ri => D.transit.routes[ri][0]).sort((a,b) => parseInt(a)-parseInt(b) || a.localeCompare(b)).join(", ")})), st => [[st.node, st.conn]]);
   for(const k in lists){ const n = near[k]; if(n && isFinite(n.d) && (!lists[k].length || lists[k][0].it !== n.it)) lists[k].unshift(n); }
   let score = 0; const parts = {};
@@ -616,6 +627,7 @@ function drawAll(ctx,X,Y,z,size){
     put(D.pts.garden, "garden", 15); put(D.pts.restroom, "restroom", 15); put(D.pts.playground, "playground", 15); put(D.pts.food, "food", 16);
     put(D.pts.aed, "aed", 15); put(D.pts.pharmacy, "pharmacy", 14); put(D.pts.health, "health", 14); put(D.pts.grocery, "grocery", 12);
     put(D.pts.facility, "community", 12); put(D.pts.school, "school", 12);
+    put(D.pts.childcare, "childcare", 15); put(D.pts.program, "program", 15); put(D.pts.sport, "sport", 16);
   }
   if(typeof drawLive==="function") drawLive(ctx,X,Y,z);
   drawLabels(ctx,X,Y,z,size,C);
@@ -749,22 +761,25 @@ function areaProfile(r){
   const within = (pts) => pts.filter(p => dist[p.node] + p.conn <= L15).length;
   // walking reach: addresses within 15 min on the street/trail network
   const A = D.addresses; let reach = 0; for(let i=0;i<D.NA;i++) if(dist[A.node[i]] + A.conn[i] <= L15) reach++;
-  const types = ["grocery","pharmacy","health","food","school","community","park","playground"];
+  const types = ["grocery","pharmacy","health","food","school","childcare","community","park","playground"];
   const typesHere = types.filter(k => n15(k) > 0).length;
   const amen = types.reduce((a,k) => a + n15(k), 0);
   const culture = within(D.pts.facility || []);
+  const E = D.extra || {}, i = r.i, at = (k, dflt) => E[k] ? E[k][i] : dflt;
+  const x = {sw: at("sw", -1), bike: at("bike", 0), bnear: at("bnear", 5000), bref: at("bref", -1), ix: at("ix", 0), pond: at("pond", 0)};
+  const swS = x.sw >= 0 ? x.sw/100 : .5;
   const transit = 70*Math.min(1, r.tph/12) + 30*Math.min(1, r.nearStops.length/4);
-  const walk = 60*Math.min(1, reach/4000) + 40*Math.min(1, amen/60);
+  const walk = 40*Math.min(1, reach/4000) + 25*Math.min(1, amen/60) + 20*swS + 15*Math.min(1, x.ix/35);
   const sc = {
     mixed:   60*typesHere/types.length + 40*Math.min(1, n15("food")/20),
-    access:  100*(L("grocery") + L("pharmacy") + L("health") + L("school"))/4,
+    access:  100*(L("grocery") + L("pharmacy") + L("health") + L("school") + L("childcare"))/5,
     transit, walk,
-    green:   35*L("park") + 35*Math.min(1, n15("park")/10) + 30*L("trail"),
-    sustain: 40*Math.min(1, r.trees.length/60) + 30*transit/100 + 30*walk/100,
-    culture: 50*L("community") + 30*Math.min(1, culture/3) + 20*L("playground"),
+    green:   30*L("park") + 30*Math.min(1, n15("park")/10) + 25*L("trail") + 15*Math.min(1, x.pond/3),
+    sustain: 30*Math.min(1, r.trees.length/60) + 20*transit/100 + 20*walk/100 + 30*Math.min(1, x.bike/2500),
+    culture: 40*L("community") + 20*Math.min(1, culture/3) + 15*L("playground") + 15*Math.min(1, n15("sport")/6) + 10*Math.min(1, n15("program")/2),
   };
   for(const k in sc) sc[k] = cl(sc[k]);
-  return {sc, reach, amen, culture, typesHere, nTypes:types.length};
+  return {sc, reach, amen, culture, typesHere, nTypes:types.length, x, n15};
 }
 function areaContext(r){
   const i = r.i, mx = D.amx[i], my = D.amy[i], M = 40075016.686 * Math.cos(LAT0*Math.PI/180);   // metres per mercator unit
@@ -834,18 +849,35 @@ function areaText(r, P){
   }
   // ---- 3. what's within reach, strengths and gaps
   const mix = s.mixed >= 70 ? "a strong mix of food, retail and personal services" : s.mixed >= 45 ? "a moderate mix of shops and services" : "only a few shops or services";
-  let w = `Within a 15-minute walk there's ${mix} (${P.amen} places across ${P.typesHere} of ${P.nTypes} everyday types).`;
+  let w = `Within a 15-minute walk there ${s.mixed >= 45 ? "is" : "are"} ${mix} (${P.amen} places across ${P.typesHere} of ${P.nTypes} everyday types).`;
+  const X = P.x;
+  if(X.sw >= 0 || X.ix){
+    const grid = X.ix >= 35 ? "on a well-connected street grid" : X.ix <= 12 ? "though winding streets and cul-de-sacs make some walking routes longer" : "";
+    const swT = X.sw < 0 ? "" : X.sw >= 85 ? "Sidewalks line nearly every street nearby" : X.sw >= 60 ? `Most streets nearby have sidewalks (about ${X.sw}% coverage)` : `Many nearby streets lack sidewalks (about ${X.sw}% coverage)`;
+    if(swT) w += ` ${swT}${grid ? (grid.startsWith("though") ? ", " : " ") + grid : ""}.`;
+    else if(grid && !grid.startsWith("though")) w += ` Streets here form a well-connected grid.`;
+  }
   const g = Math.max(1, Math.round(r.near.grocery.d/WALK));
   w += s.access >= 70 && g <= 12 ? ` Daily needs are well covered, with a grocery store about ${g} minutes away.`
      : s.access >= 50 ? ` Some daily needs are close by, but others take a longer walk; the nearest grocery store is about ${g} minutes on foot.`
      : ` Daily errands mostly mean a long walk or a drive; the nearest grocery store is about ${g} minutes on foot.`;
   const tph = r.tph >= 10 ? Math.round(r.tph) : r.tph.toFixed(1);
   w += r.nearStops.length ? ` Buses run about ${tph} trips an hour at midday from ${r.nearStops.length} stop${r.nearStops.length>1?"s":""} within 5 minutes.` : " There's no bus stop within a 5-minute walk.";
+  const bk = X.bref >= 0 ? D.extra.bikes[X.bref] : null, km = (X.bike/1000).toFixed(1);
+  if(bk && X.bnear <= 400) w += ` For cycling, there's a ${bk[0]}${bk[1] ? " on " + bk[1] : ""} about ${Math.max(1, Math.round(X.bnear/WALK))} minute${Math.round(X.bnear/WALK) > 1 ? "s" : ""} away${X.bike >= 300 ? `, and about ${km} km of bike lanes and paths within 400 m` : ""}.`;
+  else if(bk && X.bnear <= 2000) w += ` The nearest bike lane or path${bk[1] ? " (" + bk[1] + ")" : ""} is about ${(X.bnear/1000).toFixed(1)} km away.`;
+  else w += " There are no bike lanes or multi-use paths nearby.";
+  const cc = P.n15("childcare"), sp = P.n15("sport"), pg = (r.lists.program || []).filter(y => y.d <= 15*WALK);
+  const fam = [];
+  if(cc) fam.push(`${cc} child care centre${cc > 1 ? "s" : ""}`);
+  if(sp) fam.push(`${sp} sports field${sp > 1 ? "s and courts" : " or court"}`);
+  if(fam.length) w += ` For families, there ${cc + sp > 1 ? "are" : "is"} ${list(fam)} within a 15-minute walk${pg.length ? `, plus free programs such as ${pg[0].it.name} (${pg[0].it.addr.split(" · ")[0].split(",")[0]})` : ""}.`;
+  else if(isFinite(r.near.childcare.d)) w += ` The nearest child care centre is about ${Math.round(r.near.childcare.d/WALK)} minutes' walk away.`;
   if(r.trees.length >= 45) w += ` The streets are well treed, with ${r.trees.length} City trees within 100 m.`;
   const name = k => ({mixed:"shops and services", access:"daily essentials", transit:"bus service", walk:"walking access",
     green:"parks and trails", sustain:"street trees and greener travel options", culture:"libraries and rec centres"})[k];
   const weakTxt = {mixed:"shops and services are farther away", access:"everyday essentials are a longer walk", transit:"bus service is limited",
-    walk:"fewer homes and places are within walking distance", green:"parks are farther away", sustain:"tree cover and greener travel options are limited", culture:"libraries and rec centres are farther away"};
+    walk:"fewer homes and places are within an easy walk", green:"parks are farther away", sustain: r.trees.length >= 45 ? "bus and bike options are limited" : P.x.bike < 500 ? "street trees and bike routes are sparse" : "tree cover and transit options are limited", culture:"libraries and rec centres are farther away"};
   const ranked = AXES.map(([k]) => k).sort((a,b) => s[b]-s[a]);
   const strong = ranked.filter(k => s[k] >= 65).slice(0,3), weak = ranked.filter(k => s[k] < 45 && !(k==="transit" && !r.nearStops.length)).reverse().slice(0,2);
   const plus = a => a.length < 2 ? a.join("") : a.slice(0,-1).join(", ") + ", plus " + a[a.length-1];

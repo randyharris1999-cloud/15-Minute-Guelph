@@ -36,6 +36,7 @@ Search any Guelph address to get:
 | Grocery stores, pharmacies, clinics, cafés, playgrounds | © OpenStreetMap contributors (ODbL) | At build time |
 | Population, income, age, renting, commuting | Statistics Canada, 2021 Census of Population, dissemination areas | At build time |
 | Parcel fabric (lot sizes), 2023 zoning, named Guelph areas, wards | City of Guelph Open Data | At build time |
+| Child care, health services, community programs, sports fields and courts, sidewalks, bike facilities, street intersections, stormwater ponds | City of Guelph Open Data | At build time |
 
 ## Rebuilding the data
 
@@ -46,7 +47,8 @@ The `scripts/` folder holds the pipeline:
 3. `build_extra.py` prepares buildings, water and street names.
 4. `build_census.py` joins the census data.
 5. `build_parcels.py` joins parcels, zoning, named areas and wards to every address (`data/area.json`) for the "About this area" description.
-6. `build_html.py` assembles the page.
+6. `build_amenities.py` adds child care, City health services, programs and sports fields/courts, plus sidewalk, bike, intersection and pond context for each address (`data/extra.json`).
+7. `build_html.py` assembles the page.
 
 The file paths at the top of each script point to where they were first run, so edit them to match your folders. Rebuild when Guelph Transit publishes a new schedule (usually September and January) or when you want fresher OpenStreetMap shops.
 
