@@ -79,6 +79,18 @@ header p{margin:6px 0 0;color:var(--muted);font-size:13px}
 .dial b small{display:block;font-size:11px;font-family:var(--f-mono);color:var(--muted);font-weight:400;margin-top:-26px}
 .addr h2{font-family:var(--f-display);font-size:24px;font-weight:600;line-height:1.05;margin:0;text-wrap:balance}
 .grade{display:inline-block;margin-top:6px;padding:2px 8px;border-radius:99px;font-size:12px;font-weight:600;color:#fff}
+.area-text{margin:0 0 10px;font-size:14px;line-height:1.55}
+.radar-wrap{max-width:360px;margin:0 auto}
+#radar{width:100%;height:auto;display:block;overflow:visible}
+#radar .ring{fill:none;stroke:var(--rule)}
+#radar .spoke{stroke:var(--rule)}
+#radar .shape{fill:var(--accent);fill-opacity:.22;stroke:var(--accent);stroke-width:2;stroke-linejoin:round}
+#radar .dot{fill:var(--accent);stroke:var(--panel);stroke-width:1.5}
+#radar .ax{fill:var(--muted);font-size:11.5px}
+#radar .num{fill:var(--ink);font-size:11px;font-weight:600;font-family:var(--f-mono)}
+.radar-key{display:grid;grid-template-columns:1fr 1fr;gap:4px 14px;font-size:12px;margin-top:6px}
+.radar-key div{display:flex;justify-content:space-between;border-bottom:1px solid var(--rule);padding:3px 0}
+.radar-key b{font-family:var(--f-mono);font-weight:600}
 .sec h3{font-size:11px;text-transform:uppercase;letter-spacing:.09em;color:var(--muted);margin:0 0 8px;font-weight:600;display:flex;justify-content:space-between;align-items:baseline}
 .sec h3 em{font-style:normal;text-transform:none;letter-spacing:0;font-family:var(--f-mono);font-weight:400}
 .rows{display:flex;flex-direction:column;border-top:1px solid var(--rule)}
@@ -214,6 +226,13 @@ footer{font-size:11px;color:var(--muted);margin-top:auto}
           <span class="grade" id="grade"></span>
         </div>
       </div>
+    </section>
+
+    <section class="sec" id="secArea" hidden>
+      <h3>About this area</h3>
+      <p class="area-text" id="areaText"></p>
+      <div class="radar-wrap"><svg id="radar" viewBox="0 0 400 290" role="img" aria-label="Area profile chart"></svg></div>
+      <div class="radar-key" id="radarKey"></div>
     </section>
 
     <section class="sec" id="secNear" hidden>
@@ -712,12 +731,81 @@ function select(i, opts={}){
   $("tText").innerHTML = r.trees.length ? `Biggest: a ${esc(D.trees.species[D.trees.sp[big]].toLowerCase())}, ${D.trees.dbh[big]} cm across the trunk. <button class="linkbtn" id="showBig">Show on map</button>` : "No City-owned street trees recorded nearby.";
   if(r.trees.length) $("showBig").onclick = showBigTree;
   $("tSpecies").innerHTML = top.map(([s,n]) => `<span>${esc(s)} · ${n}</span>`).join("");
+  renderArea(r);
   renderDeps(); if(typeof snowNear==="function") snowNear();
   if(S.mode==="bus") runBus(); else if(S.mode==="walk") runWalk();
   tags();
   if(!opts.keepView) map.setView([lat,lon], Math.max(map.getZoom(), 15));
   base.draw();
 }
+/* ---------- area profile: rule-based scores, description and radar chart ---------- */
+const AXES = [
+  ["mixed","Mixed Use"],["access","Accessibility"],["transit","Public Transport"],["walk","Walkability"],
+  ["green","Green Spaces"],["sustain","Sustainability"],["culture","Cultural Recreation"]];
+function areaProfile(r){
+  const L15 = 15*WALK, dist = S.dist, cl = v => Math.max(0, Math.min(100, Math.round(v)));
+  const L = k => lin(r.parts[k].t, CAT[k].full, CAT[k].zero);
+  const n15 = k => (r.lists[k] || []).filter(x => x.d <= L15).length;
+  const within = (pts) => pts.filter(p => dist[p.node] + p.conn <= L15).length;
+  // walking reach: addresses within 15 min on the street/trail network
+  const A = D.addresses; let reach = 0; for(let i=0;i<D.NA;i++) if(dist[A.node[i]] + A.conn[i] <= L15) reach++;
+  const types = ["grocery","pharmacy","health","food","school","community","park","playground"];
+  const typesHere = types.filter(k => n15(k) > 0).length;
+  const amen = types.reduce((a,k) => a + n15(k), 0);
+  const culture = within(D.pts.facility || []);
+  const transit = 70*Math.min(1, r.tph/12) + 30*Math.min(1, r.nearStops.length/4);
+  const walk = 60*Math.min(1, reach/4000) + 40*Math.min(1, amen/60);
+  const sc = {
+    mixed:   60*typesHere/types.length + 40*Math.min(1, n15("food")/20),
+    access:  100*(L("grocery") + L("pharmacy") + L("health") + L("school"))/4,
+    transit, walk,
+    green:   35*L("park") + 35*Math.min(1, n15("park")/10) + 30*L("trail"),
+    sustain: 40*Math.min(1, r.trees.length/60) + 30*transit/100 + 30*walk/100,
+    culture: 50*L("community") + 30*Math.min(1, culture/3) + 20*L("playground"),
+  };
+  for(const k in sc) sc[k] = cl(sc[k]);
+  return {sc, reach, amen, culture, typesHere, nTypes:types.length};
+}
+function areaText(r, P){
+  const s = P.sc, avg = AXES.reduce((a,[k]) => a + s[k], 0) / AXES.length;
+  const name = k => ({mixed:"shops and services", access:"daily essentials", transit:"bus service", walk:"walking access",
+    green:"parks and trails", sustain:"street trees", culture:"libraries and rec centres"})[k];
+  const ranked = AXES.map(([k]) => k).sort((a,b) => s[b]-s[a]);
+  const strong = ranked.filter(k => s[k] >= 65).slice(0,3), weak = ranked.filter(k => s[k] < 45 && !(k==="transit" && !r.nearStops.length)).reverse().slice(0,2);
+  const list = a => a.length < 2 ? a.join("") : a.slice(0,-1).join(", ") + " and " + a[a.length-1];
+  const setting = avg >= 75 ? "a busy, well-connected part of Guelph" : avg >= 58 ? "a well-served Guelph neighbourhood"
+    : avg >= 40 ? "a mostly residential part of Guelph" : "a quieter, car-oriented edge of Guelph";
+  const mix = s.mixed >= 70 ? "a strong mix of food, retail and personal services" : s.mixed >= 45 ? "a moderate mix of shops and services" : "few shops or services";
+  let t = `This address sits in ${setting}, with ${mix} within a 15-minute walk (${P.typesHere} of ${P.nTypes} everyday place types, ${P.amen} places in all).`;
+  const g = Math.max(1, Math.round(r.near.grocery.d/WALK)), ess = s.access;
+  t += ess >= 70 && g <= 12 ? ` Daily needs are well covered: the nearest grocery store is about ${g} minutes away on foot.`
+     : ess >= 50 ? ` Some daily needs are close by, but others take a longer walk; the nearest grocery store is about ${g} minutes on foot.`
+     : ` Daily errands mostly mean a long walk or a drive; the nearest grocery store is about ${g} minutes on foot.`;
+  const tph = r.tph >= 10 ? Math.round(r.tph) : r.tph.toFixed(1);
+  t += r.nearStops.length ? ` Buses run about ${tph} trips an hour at midday from ${r.nearStops.length} stop${r.nearStops.length>1?"s":""} within 5 minutes.` : " There's no bus stop within a 5-minute walk.";
+  const plus = a => a.length < 2 ? a.join("") : a.slice(0,-1).join(", ") + ", plus " + a[a.length-1];
+  const weakTxt = {mixed:"shops and services are farther away", access:"everyday essentials are a longer walk", transit:"bus service is limited",
+    walk:"walking reach is limited", green:"parks are farther away", sustain:"street trees are sparse", culture:"libraries and rec centres are farther away"};
+  if(strong.length) t += ` Its strongest features are ${plus(strong.map(name))}.`;
+  if(weak.length) t += ` On the other hand, ${list(weak.map(k => weakTxt[k]))}.`;
+  return t;
+}
+function renderRadar(P){
+  const cx=200, cy=148, R=88, n=AXES.length, ang = j => -Math.PI/2 + j*2*Math.PI/n;
+  const pt = (j, v) => [cx + Math.cos(ang(j))*R*v, cy + Math.sin(ang(j))*R*v];
+  let g = "";
+  for(const f of [.25,.5,.75,1]) g += `<polygon class="ring" points="${AXES.map((_,j) => pt(j,f).join(",")).join(" ")}"/>`;
+  AXES.forEach((_,j) => { const [x,y] = pt(j,1); g += `<line class="spoke" x1="${cx}" y1="${cy}" x2="${x}" y2="${y}"/>`; });
+  const vals = AXES.map(([k]) => Math.max(.04, P.sc[k]/100));
+  g += `<polygon class="shape" points="${vals.map((v,j) => pt(j,v).join(",")).join(" ")}"/>`;
+  vals.forEach((v,j) => { const [x,y] = pt(j,v); g += `<circle class="dot" cx="${x}" cy="${y}" r="4"/>`; });
+  AXES.forEach(([k,label],j) => { const [x,y] = pt(j,1.17), c = Math.cos(ang(j));
+    const anchor = Math.abs(c) < .2 ? "middle" : c > 0 ? "start" : "end";
+    g += `<text class="ax" x="${x}" y="${y}" text-anchor="${anchor}" dominant-baseline="middle">${label}</text>`; });
+  $("radar").innerHTML = g;
+  $("radarKey").innerHTML = AXES.map(([k,l]) => `<div><span>${l}</span><b>${P.sc[k]}</b></div>`).join("");
+}
+function renderArea(r){ const P = areaProfile(r); $("areaText").textContent = areaText(r, P); renderRadar(P); $("secArea").hidden = false; }
 function esc(s){ return String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
 function focusCat(k){
   S.focusCat = (S.focusCat===k)? null : k; S.focusIdx = 0;
