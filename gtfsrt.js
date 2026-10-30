@@ -1,3 +1,4 @@
+// 15-Minute Guelph. © 2026 Randy Harris. All rights reserved.
 /* Minimal GTFS-realtime decoder (protobuf wire format), no dependencies.
    Decodes the fields 15-Minute Guelph uses from FeedMessage:
    vehicles, trip updates and alerts. */

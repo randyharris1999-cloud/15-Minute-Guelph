@@ -58,4 +58,12 @@ The file paths at the top of each script point to where they were first run, so 
 - The city-wide score map uses the last build. Each address's report card uses the live City layers.
 - The City's road closures service was returning errors at build time. The app reports "not responding" and carries on.
 
-An independent project built on City of Guelph open data. Not an official City of Guelph service. Created by Randy Harris.
+An independent project built on City of Guelph open data. Not an official City of Guelph service.
+
+## Copyright
+
+© 2026 Randy Harris. All rights reserved.
+
+The code, design and layout of 15-Minute Guelph are not open source. You're welcome to use the app and to view this repository on GitHub, but you may not copy, modify, redistribute or republish the code or design, in whole or in part, without written permission. See [LICENSE](LICENSE).
+
+The data the app displays stays under its own licences: City of Guelph Open Government Licence; Guelph Transit GTFS; Statistics Canada Open Licence (2021 Census); © OpenStreetMap contributors (ODbL).

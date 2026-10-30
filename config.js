@@ -1,3 +1,4 @@
+// 15-Minute Guelph. © 2026 Randy Harris. All rights reserved.
 // 15-Minute Guelph settings
 // relay: the Cloudflare Worker that passes Guelph Transit's live feeds to the browser.
 // This is the same Worker the Guelph Trip Planner uses (endpoints /vehicles, /tripupdates, /alerts).
