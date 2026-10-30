@@ -155,8 +155,6 @@ header p{margin:6px 0 0;color:var(--muted);font-size:13px}
 .rchip{font-family:var(--f-display);font-weight:700;font-size:15px;min-width:30px;text-align:center;padding:1px 6px;border-radius:5px;color:#fff}
 .dep .lbl{min-width:0}.dep .lbl div{font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .dep .times{font-family:var(--f-mono);font-size:12px;text-align:right}
-.trees{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
-.trees span{background:var(--chip);border-radius:99px;padding:3px 9px;font-size:12px}
 details{border-top:1px solid var(--rule);padding-top:10px;font-size:13px;color:var(--muted)}
 details summary{cursor:pointer;color:var(--ink);font-weight:600}
 details table{width:100%;border-collapse:collapse;margin-top:8px;font-size:12px}
@@ -193,10 +191,39 @@ footer{font-size:11px;color:var(--muted);margin-top:auto}
 .campop a{color:var(--accent-text)}
 .camlink{display:inline-block;margin-top:2px;padding:8px 12px;border-radius:6px;background:var(--accent);color:var(--accent-ink)!important;font-weight:600;text-decoration:none}
 .loading{position:absolute;inset:0;display:grid;place-items:center;background:var(--land);z-index:2000;font-family:var(--f-mono);color:var(--muted)}
+/* expand / collapse controls */
+.expbtn{display:inline-flex;align-items:center;gap:6px;margin-top:2px;padding:7px 12px;border:1px solid var(--rule);border-radius:99px;background:var(--bg);color:var(--accent-text);font:inherit;font-size:12px;font-weight:600;cursor:pointer}
+.expbtn:hover{background:var(--chip)}
+.expbtn:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.expbtn svg{transition:transform .15s}
+.expbtn[aria-expanded="true"] svg{transform:rotate(180deg)}
+.near-sum{margin:0 0 10px;font-size:14px;line-height:1.5}
+.near-icons{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 12px}
+.near-icons span{display:grid;place-items:center;width:30px;height:30px;border-radius:8px;background:var(--chip)}
+.near-icons span.off{opacity:.35;filter:grayscale(1)}
+.near-icons .ico{width:20px;height:20px}
+#rows{margin-bottom:10px}
+/* street-tree mix: donut + species chips */
+.treemix{display:grid;grid-template-columns:132px 1fr;gap:14px;align-items:center;margin-top:12px}
+#tPie{width:132px;height:132px;display:block}
+#tPie path{cursor:pointer;stroke:var(--panel);stroke-width:1.5;transition:opacity .15s}
+#tPie path.dim{opacity:.35}
+#tPie text{fill:var(--ink);font-family:var(--f-display);font-weight:700}
+#tPie text.s{fill:var(--muted);font-family:var(--f-mono);font-weight:400}
+.trees{display:flex;flex-wrap:wrap;gap:6px;margin-top:0}
+.trees button{display:inline-flex;align-items:center;gap:6px;background:var(--chip);border:1px solid transparent;border-radius:99px;padding:4px 10px 4px 7px;font:inherit;font-size:12px;color:var(--ink);cursor:pointer;text-align:left}
+.trees button i{width:10px;height:10px;border-radius:50%;flex:none}
+.trees button:hover{border-color:var(--rule)}
+.trees button[aria-pressed="true"]{border-color:var(--ink);background:var(--panel)}
+.trees button:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.trees button.other{cursor:default}
+.treeinfo{margin-top:10px;padding:10px 12px;border-radius:8px;background:color-mix(in srgb,#5B8A3A 10%,var(--panel));border-left:3px solid var(--sw,#5B8A3A);font-size:13px;line-height:1.5}
+.treeinfo b{display:block;font-family:var(--f-display);font-size:17px;font-weight:600;margin-bottom:2px}
+.treeinfo small{display:block;margin-top:4px;color:var(--muted);font-size:11px}
 @media (max-width:760px){
   .app{display:flex;flex-direction:column-reverse;height:auto}
   #map{height:56vh;flex:none}
-  .panel{border-right:0;overflow:visible}
+  .panel{border-right:0;overflow:visible;zoom:1.14}
 }
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
@@ -231,13 +258,37 @@ footer{font-size:11px;color:var(--muted);margin-top:auto}
     <section class="sec" id="secArea" hidden>
       <h3>About this area</h3>
       <div id="areaText"><p class="area-text"></p></div>
+      <div id="areaMore" hidden></div>
+      <button class="expbtn" id="areaBtn" aria-expanded="false" aria-controls="areaMore" hidden></button>
+    </section>
+
+    <section class="sec" id="secProfile" hidden>
+      <h3>Area profile <em>0–100 on each theme</em></h3>
       <div class="radar-wrap"><svg id="radar" viewBox="0 0 400 290" role="img" aria-label="Area profile chart"></svg></div>
       <div class="radar-key" id="radarKey"></div>
     </section>
 
     <section class="sec" id="secNear" hidden>
-      <h3>Within a 15-minute walk <em>tap a row to see them all</em></h3>
-      <div class="rows" id="rows"></div>
+      <h3>Within a 15-minute walk <em>tap a use to map it</em></h3>
+      <p class="near-sum" id="nearSum"></p>
+      <div class="near-icons" id="nearIcons" aria-hidden="true"></div>
+      <div class="rows" id="rows" hidden></div>
+      <button class="expbtn" id="nearBtn" aria-expanded="false" aria-controls="rows"></button>
+    </section>
+
+    <section class="sec" id="secTrees" hidden>
+      <h3>Street trees within 100 m <em>tap a species</em></h3>
+      <div class="stat" style="margin-top:0"><div class="big" id="tCount">–</div><p id="tText"></p></div>
+      <div class="treemix" id="tMix">
+        <svg id="tPie" viewBox="0 0 132 132" role="img" aria-label="Street tree species mix"></svg>
+        <div class="trees" id="tSpecies"></div>
+      </div>
+      <div class="treeinfo" id="tInfo" hidden></div>
+    </section>
+
+    <section class="sec" id="secLive">
+      <h3>Live data <em id="liveClock"></em></h3>
+      <div id="liveBody"><p style="margin:0;color:var(--muted);font-size:13px">Live buses, arrival predictions, service alerts, road closures and sidewalk snow clearing run on the website version of this app.</p></div>
     </section>
 
     <section class="sec" id="secReach" hidden>
@@ -281,17 +332,6 @@ footer{font-size:11px;color:var(--muted);margin-top:auto}
     <section class="sec" id="secCams">
       <h3>Live cameras <em>tap to watch</em></h3>
       <div class="camlist" id="camList"></div>
-    </section>
-
-    <section class="sec" id="secLive">
-      <h3>Live data <em id="liveClock"></em></h3>
-      <div id="liveBody"><p style="margin:0;color:var(--muted);font-size:13px">Live buses, arrival predictions, service alerts, road closures and sidewalk snow clearing run on the website version of this app.</p></div>
-    </section>
-
-    <section class="sec" id="secTrees" hidden>
-      <h3>Street trees within 100 m</h3>
-      <div class="stat" style="margin-top:0"><div class="big" id="tCount">–</div><p id="tText"></p></div>
-      <div class="trees" id="tSpecies"></div>
     </section>
 
     <details>
@@ -393,9 +433,13 @@ async function load(){
   const names = ["graph","places","addresses","trees","transit","buildings","water","streetnames","census","area","extra"];
   const res = await Promise.all(names.map(n => fetch("data/" + n + ".json").then(r => { if(!r.ok) throw new Error(n); return r.json(); })));
   names.forEach((n,i) => D[n] = res[i]);
+  // City boundary is optional: the app still works if the file is missing
+  try { const b = await fetch("data/boundary.json"); D.boundary = b.ok ? await b.json() : null; } catch(e){ D.boundary = null; }
   decode();
 }
 function decode(){
+  D.bnd = (D.boundary && D.boundary.rings || []).map(fl => { const n = fl.length/2, xs = new Float64Array(n), ys = new Float64Array(n);
+    for(let j=0;j<n;j++){ xs[j] = mercX(fl[2*j]/1e5); ys[j] = mercY(fl[2*j+1]/1e5); } return [xs, ys]; });
   const g = D.graph; const N = g.nodes.length / 2; D.N = N;
   D.nlon = new Float64Array(N); D.nlat = new Float64Array(N); D.nmx = new Float64Array(N); D.nmy = new Float64Array(N);
   for(let i=0;i<N;i++){ const lon=g.nodes[2*i]/1e5, lat=g.nodes[2*i+1]/1e5; D.nlon[i]=lon; D.nlat[i]=lat; D.nmx[i]=mercX(lon); D.nmy[i]=mercY(lat); }
@@ -616,6 +660,10 @@ function drawAll(ctx,X,Y,z,size){
     if(S.mode==="bus" && S.reached){ for(let si=0;si<D.stops.length;si++){ if(!S.reached[si]) continue; const s=D.stops[si]; const x=X(s.mx), y=Y(s.my); if(x<-5||y<-5||x>size.x+5||y>size.y+5) continue;
         ctx.beginPath(); ctx.arc(x,y,Math.max(2.5,3*sc),0,6.2832); ctx.fillStyle=C.panel; ctx.fill(); ctx.lineWidth=1.5; ctx.strokeStyle=C.ink; ctx.stroke(); } }
   }
+  // City of Guelph boundary: light halo under a dark dash-dot line
+  if(D.bnd.length){ ctx.beginPath(); for(const [xs,ys] of D.bnd){ ctx.moveTo(X(xs[0]),Y(ys[0])); for(let j=1;j<xs.length;j++) ctx.lineTo(X(xs[j]),Y(ys[j])); ctx.closePath(); }
+    ctx.lineJoin="round"; ctx.strokeStyle=C.halo; ctx.lineWidth=z>=15? 6 : 5; ctx.stroke();
+    ctx.strokeStyle=C.ink; ctx.globalAlpha=.75; ctx.lineWidth=z>=15? 2.2 : 1.8; ctx.setLineDash([10,4,2,4]); ctx.stroke(); ctx.setLineDash([]); ctx.globalAlpha=1; }
   // amenities (small points)
   if(!cityWide()){
     // icons from zoom 14 (small) and 16 (full size); plain dots further out
@@ -718,8 +766,8 @@ function select(i, opts={}){
   const [g,col] = gradeOf(r.score); $("grade").textContent = g; $("grade").style.background = col; $("arc").setAttribute("stroke", col);
   // rows
   const rows = $("rows"); rows.innerHTML = "";
-  const busRow = {k:"bus", label:"Bus service", sub: r.nearStops.length ? `${r.tph.toFixed(1)} trips/hr midday, ${r.nearStops.length} stop${r.nearStops.length>1?"s":""} in 5 min` : "No stop within a 5-minute walk", pts:r.busPts, w:BUS_W, color:BUS_COLOR, glyph:"bus", val: r.nearStops.length? Math.round(r.nearStops[0][1]/WALK)+" min" : "–"};
-  const items = Object.keys(CAT).map(k => ({k, label:CAT[k].label, sub: r.near[k].it.name + (k==="park" && r.near[k].it.addr ? " · " + r.near[k].it.addr : k!=="trail" && r.near[k].it.addr ? " · " + r.near[k].it.addr : ""), pts:r.parts[k].pts, w:CAT[k].w, color:CAT[k].color, glyph:glyphFor(k, r.near[k].it), val: isFinite(r.parts[k].t) ? Math.max(1,Math.round(r.parts[k].t)) + " min" : "–"}));
+  const busRow = {k:"bus", label:"Bus service", sub: r.nearStops.length ? `${r.tph.toFixed(1)} trips/hr midday, ${r.nearStops.length} stop${r.nearStops.length>1?"s":""} in 5 min` : "No stop within a 5-minute walk", pts:r.busPts, w:BUS_W, color:BUS_COLOR, glyph:"bus", t: r.nearStops.length? r.nearStops[0][1]/WALK : Infinity, val: r.nearStops.length? Math.round(r.nearStops[0][1]/WALK)+" min" : "–"};
+  const items = Object.keys(CAT).map(k => ({k, label:CAT[k].label, sub: r.near[k].it.name + (k==="park" && r.near[k].it.addr ? " · " + r.near[k].it.addr : k!=="trail" && r.near[k].it.addr ? " · " + r.near[k].it.addr : ""), pts:r.parts[k].pts, w:CAT[k].w, color:CAT[k].color, glyph:glyphFor(k, r.near[k].it), t:r.parts[k].t, val: isFinite(r.parts[k].t) ? Math.max(1,Math.round(r.parts[k].t)) + " min" : "–"}));
   items.splice(1, 0, busRow);
   items.push({k:"trees", label:"Street trees", sub:`${r.trees.length} within 100 m`, pts:r.treePts, w:TREE_W, color:"#4F7F2A", glyph:"trees", val:r.trees.length+""});
   const CHEV = `<svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><path d="M2 3.5l3 3 3-3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
@@ -728,21 +776,21 @@ function select(i, opts={}){
     const moreTxt = extra > 0 ? `${extra} more within 15 min` : (it.k==="trail" || it.k==="trees" ? "" : within ? "only one within 15 min" : "none within 15 min");
     const b=document.createElement("button"); b.className="row"; b.dataset.k=it.k; if(extra > 0) b.setAttribute("aria-expanded","false");
     b.innerHTML = `${iconSVG(it.glyph, it.color)}<span class="lbl"><b>${it.label}</b><div>${esc(it.sub)}</div>${moreTxt ? `<span class="more">${extra>0 ? CHEV : ""}${moreTxt}</span>` : ""}</span><span class="val">${it.val}${it.w ? `<div class="meter" title="${it.pts.toFixed(1)} of ${it.w} points"><i style="width:${(it.pts/it.w*100).toFixed(0)}%"></i></div>` : `<div style="font-size:10px;color:var(--muted)">info only</div>`}</span>`;
-    b.onclick = () => focusCat(it.k); g.appendChild(b);
+    b.onclick = () => { focusCat(it.k); if(S.focusCat) toMap(); }; g.appendChild(b);
     if(extra > 0){ const ul=document.createElement("ul"); ul.className="alts"; ul.hidden=true; const MAX=25;
       ul.innerHTML = list.slice(1, MAX+1).map((x, j) => `<li><button data-i="${j+1}"><span><b>${esc(x.it.name)}</b>${x.it.addr ? `<small>${it.k==="bus" ? "Routes " : ""}${esc(x.it.addr)}</small>` : ""}</span><span class="t">${Math.max(1,Math.round(x.d/WALK))} min</span></button></li>`).join("")
         + (extra > MAX ? `<li class="rest">and ${extra-MAX} more</li>` : "");
-      ul.querySelectorAll("button").forEach(x => x.onclick = () => focusItem(it.k, +x.dataset.i));
+      ul.querySelectorAll("button").forEach(x => x.onclick = () => { focusItem(it.k, +x.dataset.i); toMap(); });
       g.appendChild(ul); }
     rows.appendChild(g); }
+  renderNearSummary(items);
   // trees
   const tc = {}; r.trees.forEach(j => { const s = D.trees.species[D.trees.sp[j]]; tc[s]=(tc[s]||0)+1; });
-  const top = Object.entries(tc).sort((a,b)=>b[1]-a[1]).slice(0,6);
+  renderTreeMix(tc, r.trees.length);
   let big = -1; r.trees.forEach(j => { if(big<0 || D.trees.dbh[j] > D.trees.dbh[big]) big=j; }); r.bigTree = big;
   $("tCount").textContent = r.trees.length;
   $("tText").innerHTML = r.trees.length ? `Biggest: a ${esc(D.trees.species[D.trees.sp[big]].toLowerCase())}, ${D.trees.dbh[big]} cm across the trunk. <button class="linkbtn" id="showBig">Show on map</button>` : "No City-owned street trees recorded nearby.";
   if(r.trees.length) $("showBig").onclick = showBigTree;
-  $("tSpecies").innerHTML = top.map(([s,n]) => `<span>${esc(s)} · ${n}</span>`).join("");
   renderArea(r);
   renderDeps(); if(typeof snowNear==="function") snowNear();
   if(S.mode==="bus") runBus(); else if(S.mode==="walk") runWalk();
@@ -901,7 +949,233 @@ function renderRadar(P){
   $("radar").innerHTML = g;
   $("radarKey").innerHTML = AXES.map(([k,l]) => `<div><span>${l}</span><b>${P.sc[k]}</b></div>`).join("");
 }
-function renderArea(r){ const P = areaProfile(r); $("areaText").innerHTML = areaText(r, P).map(p => `<p class="area-text">${esc(p)}</p>`).join(""); renderRadar(P); $("secArea").hidden = false; }
+const CHEV_SM = `<svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><path d="M2 3.5l3 3 3-3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+function renderArea(r){ const P = areaProfile(r), paras = areaText(r, P).map(p => `<p class="area-text">${esc(p)}</p>`);
+  $("areaText").innerHTML = paras.slice(0,2).join(""); $("areaMore").innerHTML = paras.slice(2).join("");
+  const btn = $("areaBtn"), more = paras.length > 2;
+  btn.hidden = !more; $("areaMore").hidden = !(more && S.areaOpen);
+  const lab = () => { btn.setAttribute("aria-expanded", !!S.areaOpen); btn.innerHTML = (S.areaOpen ? "Show less" : "Read more") + " " + CHEV_SM; };
+  lab(); btn.onclick = () => { S.areaOpen = !S.areaOpen; $("areaMore").hidden = !S.areaOpen; lab(); };
+  renderRadar(P); $("secArea").hidden = $("secProfile").hidden = false; }
+/* on phones the map sits above the panel: bring it into view after picking something to show */
+function toMap(){ if(matchMedia("(max-width:760px)").matches) $("map").scrollIntoView({behavior:"smooth", block:"start"}); }
+function renderNearSummary(items){
+  const uses = items.filter(it => it.k !== "trees"), ok = uses.filter(it => it.t <= 15), miss = uses.filter(it => !(it.t <= 15));
+  const lc = t => t.replace(/^[A-Z](?![A-Z])/, c => c.toLowerCase());
+  const close = [...ok].sort((a,b) => a.t - b.t).slice(0,3).map(it => `${lc(it.label)} (${Math.max(1,Math.round(it.t))} min)`);
+  const lst = a => a.length < 2 ? a.join("") : a.slice(0,-1).join(", ") + " and " + a[a.length-1];
+  let s = `<b>${ok.length} of ${uses.length}</b> everyday uses are within a 15-minute walk.`;
+  if(close.length) s += ` Closest: ${esc(lst(close))}.`;
+  if(miss.length) s += ` Not within 15 minutes: ${esc(lst(miss.map(it => lc(it.label))))}.`;
+  $("nearSum").innerHTML = s;
+  $("nearIcons").innerHTML = uses.map(it => `<span class="${it.t <= 15 ? "" : "off"}" title="${esc(it.label)}">${iconSVG(it.glyph, it.color, 20)}</span>`).join("");
+  const btn = $("nearBtn"), lab = () => { btn.setAttribute("aria-expanded", !!S.nearOpen); btn.innerHTML = (S.nearOpen ? "Hide the list" : "Show the full list") + " " + CHEV_SM; };
+  $("rows").hidden = !S.nearOpen; lab();
+  btn.onclick = () => { S.nearOpen = !S.nearOpen; $("rows").hidden = !S.nearOpen; lab(); };
+}
+/* street-tree species mix: donut chart + species chips with a short description */
+const TREE_PAL = ["#2F5D2A","#5B8A3A","#93B356","#B9A245","#A0663A","#6B4A2F"], TREE_OTHER = "#C8BC9C";
+function renderTreeMix(tc, total){
+  const mix = $("tMix"), info = $("tInfo"); info.hidden = true;
+  if(!total){ mix.hidden = true; return; } mix.hidden = false;
+  const all = Object.entries(tc).sort((a,b) => b[1]-a[1]), top = all.slice(0,6), rest = all.slice(6);
+  const segs = top.map(([s,n],j) => ({s, n, c:TREE_PAL[j]}));
+  if(rest.length) segs.push({s: rest.length === 1 ? rest[0][0] : `${rest.length} other species`, n: rest.reduce((a,b) => a+b[1], 0), c:TREE_OTHER, other: rest.length > 1});
+  const cx=66, cy=66, R=62, r0=38; let a0 = -Math.PI/2, g = "";
+  const P = (a, rad) => `${(cx + Math.cos(a)*rad).toFixed(2)},${(cy + Math.sin(a)*rad).toFixed(2)}`;
+  segs.forEach((sg, j) => { const a1 = a0 + sg.n/total*2*Math.PI;
+    if(segs.length === 1) g += `<path data-j="${j}" fill="${sg.c}" fill-rule="evenodd" d="M${cx-R},${cy}a${R},${R} 0 1,0 ${2*R},0a${R},${R} 0 1,0 ${-2*R},0M${cx-r0},${cy}a${r0},${r0} 0 1,0 ${2*r0},0a${r0},${r0} 0 1,0 ${-2*r0},0"><title>${esc(sg.s)}: ${sg.n}</title></path>`;
+    else { const lg = a1 - a0 > Math.PI ? 1 : 0;
+      g += `<path data-j="${j}" fill="${sg.c}" d="M${P(a0,R)}A${R},${R} 0 ${lg},1 ${P(a1,R)}L${P(a1,r0)}A${r0},${r0} 0 ${lg},0 ${P(a0,r0)}Z"><title>${esc(sg.s)}: ${sg.n} (${Math.round(sg.n/total*100)}%)</title></path>`; }
+    a0 = a1; });
+  g += `<text x="${cx}" y="${cy+4}" text-anchor="middle" font-size="26">${all.length}</text><text class="s" x="${cx}" y="${cy+18}" text-anchor="middle" font-size="9">species</text>`;
+  $("tPie").innerHTML = g;
+  $("tSpecies").innerHTML = segs.map((sg,j) => `<button data-j="${j}" aria-pressed="false" class="${sg.other ? "other" : ""}"><i style="background:${sg.c}"></i>${esc(sg.s)} · ${sg.n}</button>`).join("");
+  let cur = -1;
+  const pick = j => { const sg = segs[j]; if(!sg || sg.other) return; cur = cur === j ? -1 : j;
+    $("tSpecies").querySelectorAll("button").forEach(b => b.setAttribute("aria-pressed", +b.dataset.j === cur));
+    $("tPie").querySelectorAll("path").forEach(p => p.classList.toggle("dim", cur >= 0 && +p.dataset.j !== cur));
+    if(cur < 0){ info.hidden = true; return; }
+    const [kind, txt] = treeInfo(sg.s), pct = Math.round(sg.n/total*100);
+    info.style.setProperty("--sw", sg.c);
+    info.innerHTML = `<b>${esc(sg.s)}</b>${esc(txt)}<small>${kind ? kind + " · " : ""}${sg.n} of ${total} nearby street trees (${pct}%)</small>`;
+    info.hidden = false; };
+  $("tSpecies").querySelectorAll("button").forEach(b => b.onclick = () => pick(+b.dataset.j));
+  $("tPie").querySelectorAll("path").forEach(p => p.onclick = () => pick(+p.dataset.j));
+}
+function treeInfo(name){
+  const KIND = {N:"Native to Ontario", I:"Introduced", C:"Cultivar of a native tree", H:"Hybrid or cultivar"};
+  let e = TREE_INFO[name];
+  if(!e){ const w = name.split(" ").pop(); e = TREE_INFO[w] || TREE_INFO[name.replace(/ Tree$/,"")]; }
+  return e ? [KIND[e[0]] || "", e[1]] : ["", "No description for this species yet."];
+}
+/* short street-tree notes. N native to Ontario, I introduced, C cultivar of a native tree, H hybrid or cultivar */
+const TREE_INFO = {
+"Norway Maple":["I","European maple planted on streets for decades for its toughness and dense shade; now seen as invasive in Ontario woodlands."],
+"Sugar Maple":["N","Ontario's signature maple: the source of maple syrup and blazing orange-red fall colour, and the leaf on Canada's flag."],
+"Honey Locust":["N","Fine, fern-like leaves cast light dappled shade. Very tolerant of road salt, so it's a favourite downtown street tree."],
+"Blue Spruce":["I","Rocky Mountain conifer with silvery blue-green needles, common on front lawns and in boulevards."],
+"Silver Maple":["N","Fast-growing riverbank maple; leaves flash silver underneath in the wind. Large but brittle-limbed with age."],
+"Red Maple":["N","Red flowers in early spring and scarlet fall colour. Native to wet woods across southern Ontario."],
+"Crimson King Maple":["H","A Norway maple cultivar with deep purple-maroon leaves all summer."],
+"Ivory Silk Lilac":["I","Japanese tree lilac: a small street tree with big creamy-white flower plumes in June. Fits under power lines."],
+"White Spruce":["N","Hardy boreal spruce with blue-green needles that smell sharp when crushed. Widespread across Canada."],
+"Hackberry":["N","Tough elm relative with warty grey bark and small purple berries that birds love. Handles drought and salt."],
+"Red Oak":["N","Fast-growing native oak with pointed, bristle-tipped leaves that turn russet-red. Acorns feed squirrels and jays."],
+"Crab Apple":["H","Small ornamental apple with clouds of pink or white spring blossoms and little fruit that birds eat over winter."],
+"Unknown":["","The City's inventory doesn't record this tree's species."],
+"Other":["","Recorded in the City's inventory without a specific species."],
+"Tulip Tree":["N","Very tall Carolinian tree with tulip-shaped leaves and green-orange tulip-like flowers. Native to the far south of Ontario."],
+"Ornamental Pear":["I","Callery pear cultivars: upright, white-flowered in spring, glossy leaves turning wine-red in fall."],
+"Ginkgo":["I","A 'living fossil' from China, unchanged for about 200 million years. Fan-shaped leaves turn bright yellow and drop almost at once."],
+"London Plane":["H","Hybrid sycamore famous on London streets. Patchy cream-and-olive peeling bark; extremely tough in cities."],
+"Green Mountain Maple":["C","A sugar maple cultivar chosen for its leathery leaves and better heat and drought tolerance on streets."],
+"Austrian Pine":["I","Dark, stiff-needled European pine, widely planted as a windbreak and tolerant of salt and poor soil."],
+"Norway Spruce":["I","European spruce with drooping branchlets and the longest cones of any spruce. Common in older yards and windbreaks."],
+"White Birch":["N","Paper birch: chalk-white peeling bark used by Indigenous peoples for canoes and containers."],
+"Linden":["","Lindens (basswoods) have heart-shaped leaves and fragrant early-summer flowers loved by bees."],
+"Freeman Maple":["H","A natural hybrid of red and silver maple that combines quick growth with good red fall colour."],
+"Green Spire Linden":["H","A little-leaf linden cultivar with a neat, narrow pyramid shape. A classic street tree."],
+"Eastern White Cedar":["N","Northern white cedar (arborvitae), Ontario's common hedge tree. Very long-lived on the Niagara Escarpment."],
+"Little Leaf Linden":["I","European linden with small heart-shaped leaves and very fragrant June flowers. Tolerates city conditions."],
+"Burr Oak":["N","Bur oak: very long-lived native oak with corky bark and acorns in fringed caps. Fire and drought tough."],
+"Cedar":["N","Most of Guelph's cedars are eastern white cedar, the familiar native hedge and windbreak tree."],
+"Allegheny Serviceberry":["N","Small native tree with white April flowers, sweet purple June berries and orange-red fall colour."],
+"White Pine":["N","Ontario's provincial tree. Soft needles in bundles of five; once prized for the masts of sailing ships."],
+"Serviceberry":["N","Also called saskatoon or juneberry: white spring flowers and edible berries that birds strip quickly."],
+"Black Walnut":["N","Valuable hardwood with large edible nuts. Its roots release juglone, which stunts many plants beneath it."],
+"Redbud":["N","Small Carolinian tree whose bare branches turn magenta-pink with flowers in May. Heart-shaped leaves."],
+"Manitoba Maple":["N","Box elder: a fast, weedy maple with compound leaves. Native to the prairies, now common everywhere."],
+"Legacy Sugar Maple":["C","A sugar maple cultivar bred to handle heat, drought and leaf scorch better on city streets."],
+"Elm":["","Elms were Ontario's great street trees until Dutch elm disease killed most of them from the 1960s on."],
+"Basswood":["N","American linden: big heart-shaped leaves and fragrant flowers that make prized basswood honey."],
+"Maple":["","A maple whose exact species isn't recorded in the City's inventory."],
+"Ash":["","Ash trees have been devastated by the emerald ash borer since it reached Ontario in 2002; few remain on streets."],
+"Scots Pine":["I","European pine with orange, flaky upper bark and short twisted needles. Old Christmas tree favourite."],
+"Amur Maple":["I","Small Asian maple with brilliant scarlet fall colour and winged seeds. Can spread into natural areas."],
+"Kentucky Coffee Tree":["N","Rare Carolinian tree with huge compound leaves, thick pods and bare-looking branches in winter. Very tough."],
+"Mountain-Ash":["I","European rowan: clusters of orange-red berries that feed waxwings and robins into winter."],
+"Endowment Sugar Maple":["C","A narrow, upright sugar maple cultivar suited to tight boulevards."],
+"English Oak":["I","Europe's iconic oak, long-lived with lobed leaves and acorns on long stalks."],
+"White Oak":["N","Majestic, very long-lived native oak with rounded lobes and pale flaky bark. Supports hundreds of insect species."],
+"Black Maple":["N","Close relative of sugar maple with droopier, darker leaves. Also tapped for syrup."],
+"Columnar Norway Maple":["H","An upright, narrow form of Norway maple used where space is tight."],
+"Bloodgood London Plane":["H","A London plane cultivar chosen for vigour and resistance to anthracnose leaf disease."],
+"Spruce":["","A spruce whose exact species isn't recorded in the City's inventory."],
+"Princeton Sentry Ginkgo":["H","A narrow, male ginkgo cultivar, so no smelly fruit. Gold fall colour."],
+"Willow":["","Willows grow fast near water and have long, narrow leaves. Weeping forms are common in parks."],
+"Corinthian Linden":["H","A compact, dense little-leaf linden cultivar with a formal pyramid shape."],
+"Cherry":["","Cherries carry spring blossoms and small fruit that feed birds."],
+"Northern Catalpa":["I","Huge heart-shaped leaves, showy white orchid-like June flowers and long bean-like pods. Native to the US Midwest."],
+"Mulberry":["","Mulberries bear sweet, blackberry-like fruit in early summer, loved by birds and sidewalk-staining."],
+"Siberian Elm":["I","Fast, hardy Asian elm resistant to Dutch elm disease, but weak-wooded and weedy."],
+"Horse Chestnut":["I","Balkan tree with big candle-like white flower spikes in May and shiny inedible 'conkers' in fall."],
+"Poplar":["","Poplars grow very fast and have fluttering leaves. Some species release cottony seeds in June."],
+"Autumn Blaze Maple":["H","A Freeman maple cultivar known for fast growth and reliably fiery orange-red fall colour."],
+"Black Locust":["I","Native to the US Appalachians. Fragrant white flower clusters in June, rot-resistant wood and thorny twigs."],
+"Hawthorn":["","Small thorny trees with white spring flowers and red haws that birds eat in winter."],
+"Thornless Honey Locust":["C","The thornless form of honey locust used on streets: light shade, salt tolerant."],
+"Sycamore Maple":["I","Large European maple, tolerant of wind and salt spray. Not to be confused with North American sycamore."],
+"Juniper":["","Junipers are scaly-leaved conifers with berry-like blue cones used to flavour gin."],
+"Oakleaf Mountain-Ash":["H","A European hybrid rowan with lobed, oak-like leaves and orange-red berries."],
+"Sycamore":["N","American sycamore: one of eastern North America's largest trees, with white patchwork bark. Native to far southern Ontario."],
+"Harlequin Maple":["H","A Norway maple cultivar with white-edged variegated leaves."],
+"White Elm":["N","American elm: the vase-shaped tree that once arched over Guelph's streets before Dutch elm disease."],
+"Trembling Aspen":["N","Leaves on flattened stalks quiver in the slightest breeze. The most widespread tree in North America."],
+"Red Pine":["N","Native pine with reddish plated bark and long needles in pairs. Widely planted in Ontario reforestation."],
+"Birch":["","Birches are graceful, short-lived trees with papery bark and catkins in spring."],
+"Tamarack":["N","A conifer that drops its needles: soft green in summer, gold in fall, bare in winter."],
+"Eastern Red Cedar":["N","Actually a juniper. Dense, aromatic, drought-tough and full of blue berry-like cones for birds."],
+"Chanticleer Pear":["H","A narrow, upright Callery pear cultivar with white spring flowers and red-purple fall colour."],
+"Fir":["","Firs have flat, soft needles and upright cones. Classic Christmas trees."],
+"Pine":["","A pine whose exact species isn't recorded in the City's inventory."],
+"Japanese Pagoda Tree":["I","Chinese native with creamy late-summer flower clusters, when little else is blooming. Tough in cities."],
+"Pear":["","Pears flower white in spring; most street pears are ornamental, fruitless types."],
+"Choke Cherry":["N","Small native cherry with white flower spikes and astringent dark fruit used in jellies."],
+"Magnolia":["","Magnolias put on big showy flowers on bare branches in early spring."],
+"Flowering Cherry":["I","Japanese-style ornamental cherries grown for their spectacular pink or white spring blossoms."],
+"Amur Corktree":["I","Asian tree with thick, corky grey bark and black berries. Can spread aggressively."],
+"Mountain Maple":["N","Shrubby native understory maple of cool woods, with red fall colour."],
+"Cypress":["","Cypress-family conifers with soft, scale-like foliage."],
+"Katsura Tree":["I","Japanese tree with round heart-shaped leaves whose fallen autumn leaves smell like burnt sugar or cotton candy."],
+"Black Spruce":["N","Slender boreal spruce of bogs and muskeg, with a club-like top."],
+"Karpick Maple":["H","A narrow, upright red maple cultivar with red twigs and yellow-orange fall colour."],
+"Pin Oak":["N","Oak with deeply cut leaves and drooping lower branches. Native to Ontario's Carolinian zone."],
+"Orchard Apple":["I","A fruiting apple tree, probably from an old orchard or backyard planting."],
+"Black Cherry":["N","The largest native cherry, with dark 'burnt potato chip' bark. Fruit feeds many birds."],
+"Parkway Maple":["H","A Norway maple cultivar with an upright, oval crown."],
+"Beech":["","Beeches have smooth grey bark and nuts that feed wildlife."],
+"Oak":["","An oak whose exact species isn't recorded. Oaks support more native insects than almost any other tree."],
+"Cumulus Serviceberry":["C","An upright serviceberry cultivar with cloud-like white spring blooms."],
+"Hemlock":["N","Eastern hemlock: graceful shade-loving conifer with short flat needles and tiny cones."],
+"Flowering Plum":["I","Ornamental plum, often with purple leaves and pale pink spring flowers."],
+"Armstrong Maple":["H","A very narrow, columnar Freeman maple cultivar."],
+"Russian Olive":["I","Silvery-leaved Eurasian tree with fragrant flowers. Hardy, but invasive in parts of North America."],
+"Crimson Sentry Maple":["H","A compact Norway maple cultivar with purple leaves."],
+"Blue Beech":["N","Musclewood: a small understory tree with smooth, sinewy grey bark."],
+"Balsam Fir":["N","Fragrant native fir with flat needles and resin blisters on the bark. A favourite Christmas tree."],
+"Butternut":["N","White walnut, now endangered in Ontario because of butternut canker disease."],
+"European Larch":["I","Deciduous conifer that turns gold and drops its needles each fall."],
+"Downey Serviceberry":["N","Downy serviceberry: native, with white spring blooms and fuzzy young leaves."],
+"Cucumber Tree":["N","Ontario's only native magnolia, endangered here. Named for its cucumber-shaped green fruit."],
+"Ohio Buckeye":["I","Horse chestnut relative from the US Midwest with palm-like leaves and glossy inedible nuts."],
+"White Mulberry":["I","Asian mulberry originally brought over for silkworms. Fruit ranges from white to purple."],
+"Swamp White Oak":["N","Native oak of wet ground with peeling twig bark. Tolerant of compacted city soil."],
+"Norwegian Sunset Maple":["H","A hybrid of Norway and Shantung maple with yellow-orange-red fall colour."],
+"Green Vase Zelkova":["H","A vase-shaped Asian elm relative resistant to Dutch elm disease."],
+"European Beech":["I","Massive, smooth grey-barked beech, often in purple-leaved forms."],
+"Sunburst Honey Locust":["C","A honey locust cultivar with golden-yellow new leaves."],
+"Rock Elm":["N","Native elm with very hard, heavy wood once used for ship keels and hockey sticks."],
+"Black Oak":["N","Native oak of dry, sandy sites with dark, deeply furrowed bark."],
+"Canadian Serviceberry":["N","Shadbush: blooms when the shad run in spring, with edible berries in June."],
+"Carolina Poplar":["H","Fast hybrid poplar planted for quick shade. Short-lived and weak-wooded."],
+"American Yellowwood":["I","Rare tree from the southeastern US with fragrant white flower clusters and smooth grey bark."],
+"Turkish Hazel":["I","Tough, pyramid-shaped hazel that drops edible hazelnuts."],
+"Eastern Cottonwood":["N","Huge, fast-growing river poplar. Fluffy cotton seeds drift in early summer."],
+"Ballerina Serviceberry":["H","A serviceberry cultivar with large white flowers and plentiful fruit."],
+"Red Mulberry":["N","Ontario's native mulberry, endangered here and threatened by hybridizing with white mulberry."],
+"White Ash":["N","Once a major native street and forest tree, now nearly wiped out by emerald ash borer."],
+"Douglas Fir":["I","West-coast giant conifer with soft needles and cones with 'mouse tail' bracts."],
+"American Beech":["N","Native beech with smooth grey bark. Leaves often cling all winter; now threatened by beech leaf disease."],
+"Tree of Heaven":["I","Very fast, invasive Chinese tree with foul-smelling leaves and long compound fronds."],
+"Silver Birch":["I","European white birch, often with drooping branchlets."],
+"Autumn Spire Maple":["C","A narrow, very hardy red maple cultivar with bright red fall colour."],
+"Larch":["","Larches are conifers that drop their needles each autumn after turning gold."],
+"Green Ash":["N","Native ash once planted widely on streets, now heavily lost to emerald ash borer."],
+"Slippery Elm":["N","Native elm whose inner bark is slippery and was used medicinally."],
+"Dawn Red Wood":["I","Dawn redwood: a deciduous conifer known only from fossils until living trees were found in China in the 1940s."],
+"Bitternut Hickory":["N","Native hickory with sulphur-yellow winter buds and bitter nuts."],
+"Hickory":["N","Hickories are hard-wooded native nut trees used for tool handles and smoking meat."],
+"Large-Tooth Aspen":["N","Native aspen with coarsely toothed leaves that flutter in wind."],
+"Chinquapin Oak":["N","Rare native oak of limestone soils with chestnut-like toothed leaves."],
+"Lombardy Poplar":["I","Very narrow, columnar poplar once planted as windbreaks along farm lanes."],
+"Pawpaw":["N","Ontario's only native tropical-type fruit: custardy, banana-mango flavoured. Rare Carolinian tree."],
+"Balsam Poplar":["N","Native poplar whose sticky spring buds smell sweetly of balsam."],
+"European Ash":["I","Europe's common ash, also vulnerable to emerald ash borer."],
+"Mugo Pine":["I","Low, shrubby mountain pine from the Alps, often used in gardens."],
+"Shagbark Hickory":["N","Native hickory with long strips of shaggy, peeling bark and sweet nuts."],
+"Sumac":["N","Staghorn sumac: fuzzy branches, red fruit cones and scarlet fall colour."],
+"Buckthorn":["I","Common buckthorn: a highly invasive shrub-tree that crowds out native woodland plants."],
+"English Elm":["I","Large European elm, also hit hard by Dutch elm disease."],
+"Striped Maple":["N","Moosewood: a small native maple with green-and-white striped bark."],
+"Pignut Hickory":["N","Native hickory of dry woods with pear-shaped nuts."],
+"Yellow Birch":["N","Native birch with shiny bronze peeling bark. Its twigs smell of wintergreen."],
+"Mockernut Hickory":["N","Native hickory with big, hard-shelled nuts and fragrant leaves."],
+"Japanese Maple":["I","Small, delicate maple with finely cut leaves, often deep red."],
+"Lilac":["I","Lilacs are prized for fragrant purple or white late-spring flowers."],
+"Smoketree":["I","Puffy pink-grey flower plumes look like smoke in summer."],
+"Nootka Cypress":["I","West-coast conifer with gracefully weeping, scaly branches."],
+"Greencolumn Maple":["C","A narrow, upright black maple cultivar."],
+"Carpathian Walnut":["I","A cold-hardy form of English (Persian) walnut with thin-shelled edible nuts."],
+"Black Ash":["N","Native ash of swamps, used for traditional basket-making by Indigenous peoples. Endangered in Ontario."],
+"Hedge Maple":["I","Small, tough European maple with corky twigs, often used in hedges."],
+"Silver Poplar":["I","White poplar: leaves white-felted underneath. Spreads by suckering roots."],
+"Corktree":["I","Asian tree with thick corky bark and black fruit. Can spread aggressively."],
+"Chinese Elm":["I","Lacebark elm with mottled, flaking bark. Resistant to Dutch elm disease."],
+"Witch-Hazel":["N","Native shrub-tree that blooms with spidery yellow flowers in late fall."],
+"Canada Yew":["N","Low, sprawling native yew of shady forests. Its needles are toxic."],
+"Catalpa":["I","Catalpas have huge heart-shaped leaves, white summer flowers and long bean-like pods."]
+};
 function esc(s){ return String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
 function focusCat(k){
   S.focusCat = (S.focusCat===k)? null : k; S.focusIdx = 0;
